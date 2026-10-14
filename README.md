@@ -23,7 +23,7 @@ python scripts/generate_workbook.py --scale 0.01 --out data/dev.xlsx   # ~10k ro
 
 The workbook is an Indian D2C electronics retailer from Apr 2024 to Mar 2026. It has five related sheets (Orders, Customers, Products, Returns, and a wide Customer_360 sheet with 86 columns), with deliberately messy headers and values and a few planted stories. Each run also writes `*_answer_key.json`, which holds the true figures recomputed from the clean data. The same `--seed` always produces the same file.
 
-Full-size run on a laptop (seed 42):
+Full-size run (seed 42):
 
 | Step | Time |
 |---|---|
@@ -31,3 +31,18 @@ Full-size run on a laptop (seed 42):
 | Mess layer | 4.1 s |
 | Write .xlsx (xlsxwriter, constant_memory) | 179.7 s |
 | **Total** | **~3 min 10 s** for 1,001,423 rows, 93.7 MB |
+
+## Reading large sheets
+
+`scripts/benchmark_readers.py` reads one sheet with four readers. Each runs in its own process, and the script records wall time and peak memory. Results on the 600,049-row Orders sheet (15 columns):
+
+| Reader | Seconds | Rows/s | Peak memory |
+|---|---|---|---|
+| openpyxl, read-only streaming | 117.4 | 5,112 | 97 MB |
+| python-calamine `iter_rows` | 13.8 | 43,640 | 789 MB |
+| pandas + calamine | 21.0 | 28,615 | 1,411 MB |
+| pandas + openpyxl (the usual first attempt) | 134.1 | 4,475 | 816 MB |
+
+```bash
+python scripts/benchmark_readers.py data/tabletalk_sample.xlsx --sheet Orders
+```

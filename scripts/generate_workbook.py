@@ -769,7 +769,7 @@ def write_workbook(sheets, path):
 
 
 def main():
-    sys.stdout.reconfigure(encoding="utf-8")   # Windows consoles default to cp1252 and choke on ₹
+    sys.stdout.reconfigure(encoding="utf-8")   # so ₹ in headers prints on any console
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--scale", type=float, default=1.0, help="row multiplier; 0.01 gives a ~10k-row file for dev")
     parser.add_argument("--seed", type=int, default=42)
