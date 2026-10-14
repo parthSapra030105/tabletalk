@@ -25,10 +25,12 @@ same workbook (and the same answers).
 
 import argparse
 import json
+import os
 import sys
 import time
 
 import numpy as np
+import xlsxwriter
 
 START = np.datetime64("2024-04-01")
 END = np.datetime64("2026-03-31")  # inclusive
@@ -454,13 +456,51 @@ def public_columns(table):
     return {k: v for k, v in table.items() if not k.startswith("_")}
 
 
-def story_checks(tables):
-    """Recompute each planted story from the generated data. Becomes answer_key.json in step 3."""
+def answer_key(tables, sheets):
+    """
+    True answers, recomputed from the clean data (never from the planted constants),
+    for the planted stories and the assignment's representative questions.
+    Written next to the workbook as *_answer_key.json; the eval script can score against it.
+    """
     o = tables["Orders"]
     p = tables["Products"]
+    c = tables["Customers"]
     valid = o["status"] != "Cancelled"
     month_labels = [str(m) for m in np.arange(START.astype("datetime64[M]"), (END + DAY).astype("datetime64[M]"))]
-    checks = {}
+
+    def cr(x):
+        return round(float(x) / 1e7, 4)
+
+    def between(dates, lo, hi):
+        return (dates >= np.datetime64(lo)) & (dates <= np.datetime64(hi))
+
+    checks = {
+        "conventions": "Revenue = net_amount, excluding Cancelled orders, unless a key says gross. Amounts in Rs crore (1 Cr = 1,00,00,000).",
+        "date_range": [str(o["order_date"].min()), str(o["order_date"].max())],
+        "expected_ingest": {
+            name: {"data_rows": len(next(iter(public_columns(tables[name]).values()))),
+                   "columns": len(sheet["headers"]),
+                   "rows_in_file_incl_junk": len(sheet["columns"][0]) + (1 if sheet["footer"] else 0)}
+            for name, sheet in sheets.items()
+        },
+        "injection_customers": {str(cid): name for cid, name in zip(c["customer_id"], sheets["Customers"]["columns"][1])
+                                if name in INJECTION_NAMES},
+    }
+
+    mar25 = valid & (o["_month"] == 11)
+    checks["net_revenue_mar_2025_by_region_cr"] = {r: cr(o["net_amount"][mar25 & (o["region"] == r)].sum()) for r in REGIONS}
+    checks["gross_vs_net_fy26_cr"] = {"gross": cr(o["gross_amount"][valid & (o["_month"] >= 12)].sum()),
+                                      "net": cr(o["net_amount"][valid & (o["_month"] >= 12)].sum())}
+    # "How many orders did we ship in Q2?" is ambiguous twice over: which Q2, and which date column.
+    shipped = o["ship_date"]
+    checks["orders_shipped_q2"] = {
+        "fy26_q2_jul_sep_2025_by_ship_date": int(between(shipped, "2025-07-01", "2025-09-30").sum()),
+        "fy26_q2_jul_sep_2025_by_order_date": int((between(o["order_date"], "2025-07-01", "2025-09-30") & ~np.isnat(shipped)).sum()),
+        "calendar_q2_apr_jun_2025_by_ship_date": int(between(shipped, "2025-04-01", "2025-06-30").sum()),
+    }
+    city = c["city"][o["_cust"]]
+    by_city = {str(k): cr(o["net_amount"][valid & (city == k)].sum()) for k in np.unique(city)}
+    checks["net_revenue_by_customer_city_top5_cr"] = dict(sorted(by_city.items(), key=lambda kv: -kv[1])[:5])
 
     east = (o["region"] == "East") & valid
     checks["east_orders_jun_oct_2025"] = {month_labels[m]: int((east & (o["_month"] == m)).sum()) for m in range(14, 19)}
@@ -480,14 +520,14 @@ def story_checks(tables):
     top = np.argsort(o["gross_amount"])[::-1][:3]
     checks["top_3_orders_gross"] = [(str(o["order_id"][i]), str(o["order_date"][i]), int(o["gross_amount"][i])) for i in top]
 
-    checks["net_revenue_by_month_cr"] = {month_labels[m]: round(float(o["net_amount"][valid & (o["_month"] == m)].sum()) / 1e7, 2)
+    checks["net_revenue_by_month_cr"] = {month_labels[m]: cr(o["net_amount"][valid & (o["_month"] == m)].sum())
                                          for m in range(N_MONTHS)}
     checks["status_counts"] = {s: int((o["status"] == s).sum()) for s in np.unique(o["status"])}
     return checks
 
 
 # --- Mess layer --------------------------------------------------------------
-# Applied to the finished clean tables, so story_checks() (the answer key) always
+# Applied to the finished clean tables, so answer_key() always
 # describes what a *correct* ingest should recover from the messy file.
 #
 # Each sheet becomes a layout: preamble rows above the header, the header row,
@@ -703,37 +743,63 @@ def make_messy(tables, rng):
     }
 
 
+# --- Output ------------------------------------------------------------------
+
+def write_workbook(sheets, path):
+    """
+    Stream every sheet to disk with xlsxwriter's constant_memory mode: each row is
+    flushed as soon as the next one starts, so memory stays flat however many rows
+    we write. (The trade-off: rows must be written strictly top to bottom.)
+    """
+    workbook = xlsxwriter.Workbook(path, {"constant_memory": True, "default_date_format": "dd-mm-yyyy"})
+    for name, sheet in sheets.items():
+        ws = workbook.add_worksheet(name)
+        r = 0
+        for row in sheet["preamble"]:
+            ws.write_row(r, 0, row)
+            r += 1
+        ws.write_row(r, 0, ["" if h is None else h for h in sheet["headers"]])
+        r += 1
+        for row in zip(*sheet["columns"]):
+            ws.write_row(r, 0, row)          # None cells are left empty
+            r += 1
+        if sheet["footer"]:
+            ws.write_row(r, 0, sheet["footer"])
+    workbook.close()
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")   # Windows consoles default to cp1252 and choke on ₹
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--scale", type=float, default=1.0, help="row multiplier; 0.01 gives a ~10k-row file for dev")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--out", default="data/tabletalk_sample.xlsx")
     args = parser.parse_args()
 
     tables, timings = build(args.scale, args.seed)
 
-    for name, table in tables.items():
-        cols = public_columns(table)
-        print(f"{name:<13} {len(next(iter(cols.values()))):>9,} rows  {len(cols):>3} cols")
     t = time.perf_counter()
     # Separate stream, so changing the mess never changes the underlying data or its answer key.
     sheets = make_messy(tables, np.random.default_rng(args.seed + 1))
     timings["mess layer"] = time.perf_counter() - t
 
-    for step, secs in timings.items():
-        print(f"  {step:<22} {secs:6.2f}s")
+    t = time.perf_counter()
+    write_workbook(sheets, args.out)
+    timings["write xlsx"] = time.perf_counter() - t
 
+    key_path = os.path.splitext(args.out)[0] + "_answer_key.json"
+    with open(key_path, "w", encoding="utf-8") as f:
+        json.dump(answer_key(tables, sheets), f, indent=2, ensure_ascii=False)
+
+    total = 0
     for name, sheet in sheets.items():
-        print(f"\n=== {name}: {len(sheet['columns'][0]):,} data rows (incl. junk), {len(sheet['headers'])} cols")
-        for row in sheet["preamble"]:
-            print("  preamble:", row)
-        print("  headers: ", sheet["headers"][:16], "..." if len(sheet["headers"]) > 16 else "")
-        for i in range(3):
-            print("  row:     ", [sheet["columns"][c][i] for c in range(min(16, len(sheet["headers"])))])
-        if sheet["footer"]:
-            print("  footer:  ", sheet["footer"])
-
-    print(json.dumps(story_checks(tables), indent=2))
+        rows = len(sheet["columns"][0])
+        total += rows
+        print(f"{name:<13} {rows:>9,} rows  {len(sheet['headers']):>3} cols")
+    print(f"{'total':<13} {total:>9,} rows")
+    for step, secs in timings.items():
+        print(f"  {step:<22} {secs:7.2f}s")
+    print(f"wrote {args.out} ({os.path.getsize(args.out) / 1e6:.1f} MB) and {key_path}")
 
 
 if __name__ == "__main__":
