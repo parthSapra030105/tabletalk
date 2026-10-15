@@ -53,6 +53,8 @@ The split follows one rule: **the model translates, code decides and touches dat
 2. **`sqlguard`** parses the query with sqlglot rather than pattern-matching it. It allows exactly one statement, and that statement must be a query. It walks the *whole tree*: `WITH d AS (DELETE … RETURNING *) SELECT …` and `SELECT … INTO t` are both SELECTs at the top level, and only a full walk finds the `DELETE` and the `INTO`. It also blocks functions like `pg_sleep` and `pg_read_file`, allows only this dataset's tables and columns, and caps `LIMIT`.
 3. **The Postgres role.** It has only `SELECT` on dataset tables, is read-only at the role level, and has a 10s timeout. It can't see the app's own tables or create temp tables.
 
+The MCP server (`mcp_server.py`) reuses these tools unchanged, so the same walls hold for any MCP client. The attack list is tested through it too.
+
 There's also a read-only *transaction* and a plan-cost ceiling. Normal questions plan at 15k–23k; a keyless self-join plans at 286M and is refused before it runs.
 
 I tested that wall 3 holds even when wall 2 is bypassed. A session can switch its own read-only flag off, and the table privileges still refuse the `DELETE`.
@@ -102,7 +104,7 @@ My first memory was "the previous turn" only. A delete attempt between two sales
 
 ## What didn't you get to, and how would you approach it?
 
-- **MCP server (P2).** The three tools already live in one module, with the safety inside `run_query`, so exposing them over MCP needs no new safety work.
+- **The graph calling its tools over MCP.** The MCP server is built and tested, but the graph still calls the same functions in-process. Routing the graph through MCP would make the server the only door to the data, at the cost of a process hop per query. I'd do it if the tools ever moved to their own service.
 - **Streaming (P2).** I'd stream LangGraph node updates over server-sent events, so the UI shows the SQL, then the table, then the explanation as each is ready.
 - **Several files at once (P2).** The router would gain a "which dataset?" step, choosing from each dataset's one-line table descriptions.
 - **Uploads that survive a restart.** They run in a thread, and a restart marks them failed. A real system needs a task queue.

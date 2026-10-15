@@ -21,7 +21,8 @@ The model never reads the data. It sees a compact description of the data, picks
 | P1 | Clickable suggestions, follow-ups, token logging, upload progress, clear errors for bad files | ✅ |
 | P1 | Checkpointer (chats survive refresh and restart), questions that join sheets | ✅ |
 | P2 | Eval script: 10 questions scored against the generator's answer key | ✅ 10/10 ([report](docs/eval-report.md)) |
-| P2 | MCP server, streaming, choosing between files | Not done; see [NOTES.md](NOTES.md) |
+| P2 | MCP server: the same tools over stdio, attacks through MCP tested | ✅ |
+| P2 | Streaming, choosing between files | Not done; see [NOTES.md](NOTES.md) |
 
 ## Quick start
 
@@ -56,7 +57,7 @@ Open http://localhost:5173, choose the sample dataset, and ask *"What were total
 **Checks:**
 ```bash
 cd backend
-python -m pytest                       # 107 tests, including writes attempted through the read-only role
+python -m pytest                       # 116 tests, including writes attempted through the read-only role and through MCP
 python manage.py safety_check          # the brief's attack list end to end; rewrites docs/safety-report.md
 python manage.py eval                  # 10 questions with known answers; rewrites docs/eval-report.md
 python manage.py token_report          # tokens per turn for the latest chat
@@ -151,6 +152,25 @@ graph TD;
 | `answer` | yes | Chooses blocks and writes words with placeholders; **code fills every number** from the result |
 | `give_up` | **no** | After 2 failed retries: a clear "couldn't answer" with the last error |
 | `finish` | no | Records the turn for follow-ups (the last 3 turns are kept) |
+
+## MCP server
+
+`backend/mcp_server.py` exposes the tools over MCP (stdio), so any MCP client can query uploaded datasets: Claude Desktop, an IDE, the MCP Inspector, or another agent. There are four tools: `list_datasets`, `list_tables`, `describe_table` and `run_query`. All are annotated read-only.
+
+They are the same functions the graph calls (`agent/tools.py`), and `run_query` carries all of its own safety: the sqlglot check, the read-only role and transaction, the timeout, the cost ceiling, and a 200-row cap for MCP. A new caller, whichever model is behind it, hits the same walls. `tests/test_mcp.py` starts the server the way a client does and sends the attack list through it.
+
+```json
+{
+  "mcpServers": {
+    "tabletalk": {
+      "command": "<repo>/.venv/bin/python",
+      "args": ["<repo>/backend/mcp_server.py"]
+    }
+  }
+}
+```
+
+The graph itself calls the tools in-process rather than over MCP. They are the same functions, and the process hop would add latency to every query without adding a wall.
 
 ## Safety
 

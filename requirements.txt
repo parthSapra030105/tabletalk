@@ -1,6 +1,7 @@
 django==6.1.2
 langgraph==1.2.15
 langgraph-checkpoint-postgres==3.2.0
+mcp==2.3.0
 numpy==2.5.4
 openai==3.31.0
 openpyxl==3.1.5
