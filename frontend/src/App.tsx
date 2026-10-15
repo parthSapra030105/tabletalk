@@ -1,15 +1,20 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 
 import { AppShell } from '@/components/layout/app-shell'
-import ChatPage from '@/pages/Chat'
 import DashboardPage from '@/pages/Dashboard'
 import DatasetPage from '@/pages/Dataset'
+
+// The chat page carries the chart library; load it only when a chat is opened.
+const ChatPage = lazy(() => import('@/pages/Chat'))
 
 // One shell for every page, so the sidebar stays mounted while only the page changes.
 function ShellLayout() {
   return (
     <AppShell>
-      <Outlet />
+      <Suspense fallback={null}>
+        <Outlet />
+      </Suspense>
     </AppShell>
   )
 }
