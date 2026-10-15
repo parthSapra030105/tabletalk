@@ -31,7 +31,10 @@ def main():
         from .postgres import load_workbook
         load_dotenv(Path(__file__).resolve().parents[2] / ".env")
         progress = lambda sheet, done, total: print(f"  {sheet}: {done:,} of ~{total or 0:,} rows", flush=True)
-        schema, reports = load_workbook(args.path, progress=progress)
+        schema, reports, catalog = load_workbook(args.path, progress=progress)
+        catalog_path = Path(args.path).with_name(f"{Path(args.path).stem}_{schema}_catalog.json")
+        catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"catalog: {catalog_path} ({catalog['timings']})")
         print(f"\nloaded into schema {schema}")
     else:
         reports = ingest_workbook(args.path)

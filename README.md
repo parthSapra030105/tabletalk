@@ -78,3 +78,5 @@ Full sample workbook (1,001,375 rows kept, 49 junk rows skipped), loaded into Po
 | **Total** | **1,001,375** | | | **81.0** |
 
 Reading the file and cleaning values take about 63 s of that; `COPY` adds about 18 s.
+
+In the same transaction, the catalog step profiles every column, detects keys and joins, and adds indexes. It takes another 43.7 s (24.9 s profiling, 18.8 s keys, joins and indexes), for **127.4 s end to end**. All four joins in the sample (`orders.cust_id → customers.customerid`, `orders.product_code → products.sku`, `returns.order_ref → orders.order_id`, `customer_360.customer_id → customers.customerid`) are found from the values alone, because no pair of names matches.

@@ -13,6 +13,8 @@ import os
 import psycopg
 from psycopg import sql
 
+from catalog.profile import build_catalog
+
 from .pipeline import Sink, ingest_workbook
 
 READER_ROLE = "tabletalk_reader"
@@ -62,7 +64,7 @@ def next_schema_name(conn):
 
 
 def load_workbook(path, dsn=None, schema=None, progress=None):
-    """Ingest a workbook into a new schema. Returns (schema, sheet reports)."""
+    """Ingest a workbook into a new schema and build its catalog. Returns (schema, sheet reports, catalog)."""
     dsn = dsn or os.environ["DATABASE_URL"]
     with psycopg.connect(dsn) as conn:
         schema = schema or next_schema_name(conn)
@@ -76,4 +78,6 @@ def load_workbook(path, dsn=None, schema=None, progress=None):
             except BaseException as exc:
                 sink.abort(exc)
                 raise
-    return schema, reports
+            # Same transaction: a dataset is never visible without its catalog and indexes.
+            catalog = build_catalog(conn, schema, reports)
+    return schema, reports, catalog
