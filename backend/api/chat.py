@@ -82,3 +82,9 @@ def ask(thread, question):
         thread.title = question[:200]
     thread.save()
     return message
+
+
+def shutdown():
+    """Close the checkpointer's connection pool (for commands that exit right after using the graph)."""
+    if _saver is not None:
+        _saver.conn.close()

@@ -158,6 +158,8 @@ tables and columns described below (tables need no schema prefix).
 - When totalling money or counting sales or orders, leave out rows whose status marks them cancelled
   or void (if such a status value exists), unless the question is about those rows or the glossary
   says otherwise. Say so in assumptions.
+- Never wrap an aggregate in COALESCE(..., 0): if nothing matches, the result must stay empty so it
+  can be reported as "no data" rather than as a real zero.
 - Aggregate in SQL; return the rows a person would want to see (usually under 50), with readable
   snake_case aliases. Round money to 2 decimals. Order the rows meaningfully.
 - Relative periods ("this quarter", "last 6 months") are relative to the latest date in the data,

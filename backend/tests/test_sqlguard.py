@@ -91,3 +91,12 @@ def test_union_gets_a_limit_too():
 def test_tables_used_are_reported():
     q = check("SELECT c.city FROM orders o JOIN customers c ON c.customerid = o.cust_id", CATALOG)
     assert q.tables == ["customers", "orders"]
+
+
+def test_coalesce_to_zero_around_an_aggregate_is_removed():
+    q = check("SELECT COALESCE(SUM(net_amount), 0) AS total FROM orders WHERE region = 'Nowhere'", CATALOG).sql
+    assert "COALESCE" not in q.upper() and "SUM(net_amount) AS total" in q
+
+
+def test_other_coalesce_is_kept():
+    assert "COALESCE" in check("SELECT COALESCE(region, 'unknown') FROM orders", CATALOG).sql

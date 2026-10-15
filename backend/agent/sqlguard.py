@@ -73,6 +73,7 @@ def check(sql, catalog, row_cap=ROW_CAP):
 
     tables = _check_tables(root, catalog)
     _check_columns(root, catalog, tables)
+    _keep_empty_results_empty(root)
     _apply_limit(root, row_cap)
     return CheckedQuery(sql=root.sql(dialect="postgres", comments=False), tables=sorted(set(tables.values())))
 
@@ -124,6 +125,17 @@ def _check_columns(root, catalog, tables):
         elif name not in readable and name not in defined:
             raise QueryRejected(f"Unknown column '{name}' in the tables this query reads "
                                 f"({', '.join(sorted(set(tables.values())))}).")
+
+
+def _keep_empty_results_empty(root):
+    """COALESCE(SUM(x), 0) turns 'no rows matched' into a confident zero, so a question about a
+    year with no data would come back as '₹0'. Unwrap it: an empty result stays NULL and is
+    reported as no data."""
+    for node in list(root.find_all(exp.Coalesce)):
+        fallbacks = node.expressions
+        if (isinstance(node.this, exp.AggFunc) and fallbacks
+                and all(isinstance(f, exp.Literal) and f.is_number for f in fallbacks)):
+            node.replace(node.this)
 
 
 def _apply_limit(root, row_cap):

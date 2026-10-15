@@ -34,7 +34,8 @@ The assistant answers questions about one uploaded spreadsheet. It can only READ
 Routes:
 - data: a question answered by querying the rows: totals, counts, lists, trends, comparisons,
   rankings, filters, and follow-ups to the previous question ("now just for North").
-  Use this even if you suspect the file lacks the needed column; a later step checks.
+  Use this even if you suspect the file lacks the needed column ("what's our profit margin?" with
+  no cost column is still data): a later step checks and explains what is missing.
 - about_file: a question about the file itself rather than its rows: which tables or columns exist,
   what a column means, how many rows there are, what period the data covers.
 - write: any request to change, delete, add, update, fix or remove data or tables, or to run a
