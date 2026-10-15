@@ -125,8 +125,11 @@ def _undisclosed_ambiguities(catalog, selection, question, glossary, assumptions
     return extra
 
 
+# Routing functions return an outcome, not a node name; graph.py maps outcomes to nodes,
+# and LangGraph uses the outcome as the edge label in the diagram.
+
 def after_schema(state: State):
-    return "explain_missing" if state.get("error") else "sql"
+    return "missing" if state.get("error") else "answerable"
 
 
 def explain_missing(state: State):
@@ -210,11 +213,11 @@ def sql(state: State, runtime: Runtime[Context]):
 
 
 def _retry_or_give_up(state):
-    return "sql" if state.get("attempts", 0) <= MAX_RETRIES else "give_up"
+    return "retry" if state.get("attempts", 0) <= MAX_RETRIES else "out_of_retries"
 
 
 def after_sql(state: State):
-    return _retry_or_give_up(state) if state.get("error") else "validate"
+    return _retry_or_give_up(state) if state.get("error") else "query"
 
 
 # --- validate and run (no LLM) ---------------------------------------------------
@@ -228,7 +231,7 @@ def validate(state: State, runtime: Runtime[Context]):
 
 
 def after_validate(state: State):
-    return _retry_or_give_up(state) if state.get("error") else "run"
+    return _retry_or_give_up(state) if state.get("error") else "valid"
 
 
 def _plain(v):
@@ -253,7 +256,7 @@ def run(state: State, runtime: Runtime[Context]):
 
 
 def after_run(state: State):
-    return _retry_or_give_up(state) if state.get("error") else "answer"
+    return _retry_or_give_up(state) if state.get("error") else "rows"
 
 
 def give_up(state: State):

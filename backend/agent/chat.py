@@ -57,7 +57,7 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     parser = argparse.ArgumentParser()
-    parser.add_argument("catalog")
+    parser.add_argument("catalog", nargs="?", help="catalog JSON written by `python -m ingest ... --load`")
     parser.add_argument("-q", "--question", action="append", help="ask this and exit (repeatable)")
     parser.add_argument("--mermaid", action="store_true", help="print the graph as a Mermaid diagram")
     args = parser.parse_args()
@@ -66,6 +66,8 @@ def main():
     if args.mermaid:
         print(graph.get_graph().draw_mermaid())
         return
+    if not args.catalog:
+        parser.error("a catalog file is needed to chat")
     glossary_path = Path(args.catalog).with_name(Path(args.catalog).stem + "_glossary.json")
     glossary = json.loads(glossary_path.read_text(encoding="utf-8")) if glossary_path.exists() else {}
     context = Context(catalog=json.loads(Path(args.catalog).read_text(encoding="utf-8")), glossary=glossary,

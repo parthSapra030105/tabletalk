@@ -43,10 +43,11 @@ def build(checkpointer=None):
         "write": "refuse", "off_topic": "redirect", "about_file": "describe",
         "vague": "clarify", "define": "remember", "data": "schema",
     })
-    g.add_conditional_edges("schema", d.after_schema, ["sql", "explain_missing"])
-    g.add_conditional_edges("sql", d.after_sql, ["validate", "sql", "give_up"])
-    g.add_conditional_edges("validate", d.after_validate, ["run", "sql", "give_up"])
-    g.add_conditional_edges("run", d.after_run, ["answer", "sql", "give_up"])
+    g.add_conditional_edges("schema", d.after_schema, {"answerable": "sql", "missing": "explain_missing"})
+    # The retry loop: any failure goes back to sql with the error, at most MAX_RETRIES times.
+    g.add_conditional_edges("sql", d.after_sql, {"query": "validate", "retry": "sql", "out_of_retries": "give_up"})
+    g.add_conditional_edges("validate", d.after_validate, {"valid": "run", "retry": "sql", "out_of_retries": "give_up"})
+    g.add_conditional_edges("run", d.after_run, {"rows": "answer", "retry": "sql", "out_of_retries": "give_up"})
     for terminal in ["refuse", "redirect", "describe", "clarify", "remember", "explain_missing",
                      "give_up", "answer"]:
         g.add_edge(terminal, "finish")
