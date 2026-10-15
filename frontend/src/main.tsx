@@ -5,13 +5,16 @@ import { BrowserRouter } from 'react-router-dom'
 import App from '@/App'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { AppDataProvider } from '@/context/app-data'
 import '@/index.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <TooltipProvider delayDuration={200}>
-        <App />
+        <AppDataProvider>
+          <App />
+        </AppDataProvider>
         <Toaster position="bottom-right" />
       </TooltipProvider>
     </BrowserRouter>

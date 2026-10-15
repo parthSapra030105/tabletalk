@@ -1,9 +1,9 @@
-import { AppShell } from '@/components/app-shell'
+import { Page, PageHeader } from '@/components/layout/page'
 
 export default function DatasetPage() {
   return (
-    <AppShell>
-      <div className="p-6 text-muted-foreground">Dataset page — coming next.</div>
-    </AppShell>
+    <Page>
+      <PageHeader title="Dataset" subtitle="Coming next." />
+    </Page>
   )
 }

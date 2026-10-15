@@ -46,3 +46,11 @@ export function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
+
+// Short counts for tight spaces: 950, 10.2k, 1.0L, 2.5Cr (Indian units).
+export function formatCompact(n: number): string {
+  if (n >= 1e7) return `${+(n / 1e7).toFixed(1)}Cr`
+  if (n >= 1e5) return `${+(n / 1e5).toFixed(1)}L`
+  if (n >= 1e3) return `${+(n / 1e3).toFixed(1)}k`
+  return String(n)
+}

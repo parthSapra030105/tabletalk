@@ -60,7 +60,7 @@ def dataset_summary(ds):
     tables = ds.catalog.get("tables", [])
     return {"id": ds.pk, "name": ds.name, "status": ds.status, "progress": ds.progress, "error": ds.error,
             "is_sample": ds.is_sample, "created_at": ds.created_at, "file_size": ds.file_size,
-            "tables": len(tables), "rows": sum(t["row_count"] for t in tables)}
+            "tables": len(tables), "rows": sum(t["row_count"] for t in tables), "threads": ds.threads.count()}
 
 
 def dataset_detail(ds):

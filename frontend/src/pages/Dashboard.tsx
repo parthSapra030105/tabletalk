@@ -1,57 +1,72 @@
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, FileSpreadsheet, Upload } from 'lucide-react'
 
-import { AppShell } from '@/components/app-shell'
-import { DatasetCard } from '@/components/dataset-card'
-import { UploadCard } from '@/components/upload-card'
+import { DatasetsTable } from '@/components/datasets-table'
+import { EmptyState, KpiCard, Page, PageHeader, SectionHeader } from '@/components/layout/page'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDatasets } from '@/hooks/use-datasets'
+import { isLoading, useAppData } from '@/context/app-data'
+import { formatCompact } from '@/lib/format'
 
 export default function DashboardPage() {
-  const { datasets, error, refresh, setDatasets } = useDatasets()
+  const { datasets, datasetsError, openUpload } = useAppData()
+  const ready = datasets?.filter((d) => d.status === 'ready') ?? []
+  const loading = datasets?.filter((d) => isLoading(d.status)).length ?? 0
 
   return (
-    <AppShell>
-      <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Your data</h1>
-            <p className="text-muted-foreground">
-              Upload an Excel workbook and ask questions about it in plain language. Every number in an answer comes from
-              a query you can inspect.
-            </p>
-          </div>
+    <Page>
+      <PageHeader
+        eyebrow="Workspace"
+        title="Datasets"
+        subtitle="Upload a workbook and ask about it in plain language. Answers are built from read-only queries, and every number links back to the SQL that produced it."
+        right={
+          <Button onClick={() => openUpload()}>
+            <Upload /> Upload workbook
+          </Button>
+        }
+      />
 
-          <UploadCard onUploaded={(d) => setDatasets((current) => [d, ...(current ?? [])])} />
+      {datasetsError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle />
+          <AlertTitle>Couldn't reach the server</AlertTitle>
+          <AlertDescription>{datasetsError}</AlertDescription>
+        </Alert>
+      )}
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle />
-              <AlertTitle>Couldn't load your datasets</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <section className="space-y-3">
-            <h2 className="text-sm font-medium text-muted-foreground">Datasets</h2>
-            {datasets === null && !error ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {[0, 1, 2].map((i) => (
-                  <Skeleton key={i} className="h-44 rounded-xl" />
-                ))}
-              </div>
-            ) : datasets && datasets.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                No datasets yet. Upload a workbook above, or run <code className="font-mono">python manage.py load_sample</code>.
-              </p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {datasets?.map((d) => <DatasetCard key={d.id} dataset={d} onDeleted={refresh} />)}
-              </div>
-            )}
-          </section>
-        </div>
+      <div className="mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard label="Datasets" value={datasets ? ready.length : '—'} hint={loading ? `${loading} loading now` : 'ready to query'} />
+        <KpiCard label="Rows loaded" value={datasets ? formatCompact(ready.reduce((n, d) => n + d.rows, 0)) : '—'} hint="across all sheets" />
+        <KpiCard label="Sheets" value={datasets ? ready.reduce((n, d) => n + d.tables, 0) : '—'} hint="each one a table" />
+        <KpiCard label="Conversations" value={datasets ? datasets.reduce((n, d) => n + d.threads, 0) : '—'} hint="kept across sessions" />
       </div>
-    </AppShell>
+
+      <SectionHeader title="All datasets" count={datasets?.length} right={loading ? 'Updating live' : undefined} />
+      {datasets === null && !datasetsError ? (
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-16 rounded-xl" />
+          ))}
+        </div>
+      ) : datasets && datasets.length === 0 ? (
+        <EmptyState
+          icon={<FileSpreadsheet />}
+          title="No datasets yet"
+          hint={
+            <>
+              Upload an .xlsx workbook, drop one anywhere on this page, or run{' '}
+              <code className="font-mono text-foreground">python manage.py load_sample</code> for a ready-made one.
+            </>
+          }
+          action={
+            <Button onClick={() => openUpload()}>
+              <Upload /> Upload workbook
+            </Button>
+          }
+        />
+      ) : (
+        datasets && <DatasetsTable datasets={datasets} />
+      )}
+    </Page>
   )
 }

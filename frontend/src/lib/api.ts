@@ -13,6 +13,7 @@ export interface DatasetSummary {
   file_size: number
   tables: number
   rows: number
+  threads: number
 }
 
 export interface SheetReport {
