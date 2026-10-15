@@ -30,6 +30,12 @@ def show(state):
             print(f"  [{b['type']}] {b['content']}")
         elif b["type"] == "sql":
             print(f"  [sql] {b['query']}")
+        elif b["type"] == "metric":
+            print(f"  [metric] {b['label']}: {b['display']}")
+        elif b["type"].endswith("_chart"):
+            preview = ", ".join(f"{r[b['x']]}{'/' + str(r[b['series']]) if b.get('series') else ''}={r[b['y']]}"
+                                for r in b["rows"][:5])
+            print(f"  [{b['type']}] x={b['x']} y={b['y']} series={b.get('series')} ({len(b['rows'])} points) {preview}…")
         elif b["type"] == "suggestions":
             print(f"  [suggestions] {' | '.join(b['options'])}")
         elif b["type"] == "table":

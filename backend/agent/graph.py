@@ -9,7 +9,7 @@ The Tabletalk graph.
                              --data-------> schema --can't answer--> explain_missing|
                                               |                                     |
                                               v                                     |
-                            +--------------> sql ---> validate ---> run ---> show_result
+                            +--------------> sql ---> validate ---> run ---> answer ------|
                             |                 |          |           |
                             +--- retry <------+----------+-----------+   (an error, at most 2 retries)
                                               |
@@ -24,6 +24,7 @@ from langgraph.graph import END, START, StateGraph
 
 from . import data_nodes as d
 from . import nodes as n
+from .answer import answer
 from .state import Context, State
 
 
@@ -33,7 +34,7 @@ def build(checkpointer=None):
                      ("describe", n.describe), ("clarify", n.clarify), ("remember", d.remember),
                      ("schema", d.schema), ("explain_missing", d.explain_missing), ("sql", d.sql),
                      ("validate", d.validate), ("run", d.run), ("give_up", d.give_up),
-                     ("show_result", d.show_result), ("finish", n.finish)]:
+                     ("answer", answer), ("finish", n.finish)]:
         g.add_node(name, fn)
 
     g.add_edge(START, "start")
@@ -45,9 +46,9 @@ def build(checkpointer=None):
     g.add_conditional_edges("schema", d.after_schema, ["sql", "explain_missing"])
     g.add_conditional_edges("sql", d.after_sql, ["validate", "sql", "give_up"])
     g.add_conditional_edges("validate", d.after_validate, ["run", "sql", "give_up"])
-    g.add_conditional_edges("run", d.after_run, ["show_result", "sql", "give_up"])
+    g.add_conditional_edges("run", d.after_run, ["answer", "sql", "give_up"])
     for terminal in ["refuse", "redirect", "describe", "clarify", "remember", "explain_missing",
-                     "give_up", "show_result"]:
+                     "give_up", "answer"]:
         g.add_edge(terminal, "finish")
     g.add_edge("finish", END)
     return g.compile(checkpointer=checkpointer or InMemorySaver())

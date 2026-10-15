@@ -55,7 +55,9 @@ def _last_turn(state):
 
 SCHEMA_SYSTEM = """You prepare a question about a spreadsheet for SQL generation. From the catalog,
 pick the tables and the columns needed to answer it (include join keys when you pick several tables,
-and every column needed for filters, grouping and ordering). Keep the pick small.
+and every column needed for filters, grouping and ordering). When the answer totals money or counts
+sales or orders, also pick the status column if one exists, so cancelled rows can be left out.
+Keep the pick small.
 
 If the previous turn is a question this one follows on from ("now just for North", "what about last
 year?"), pick what the combined question needs.
@@ -161,6 +163,9 @@ SQL_SYSTEM = """You write exactly one PostgreSQL SELECT that answers the questio
 tables and columns described below (tables need no schema prefix).
 
 - Compare text with the stored values exactly as listed under "values exactly".
+- When totalling money or counting sales or orders, leave out rows whose status marks them cancelled
+  or void (if such a status value exists), unless the question is about those rows or the glossary
+  says otherwise. Say so in assumptions.
 - Aggregate in SQL; return the rows a person would want to see (usually under 50), with readable
   snake_case aliases. Round money to 2 decimals. Order the rows meaningfully.
 - Relative periods ("this quarter", "last 6 months") are relative to the latest date in the data,
@@ -251,7 +256,7 @@ def run(state: State, runtime: Runtime[Context]):
 
 
 def after_run(state: State):
-    return _retry_or_give_up(state) if state.get("error") else "show_result"
+    return _retry_or_give_up(state) if state.get("error") else "answer"
 
 
 def give_up(state: State):
@@ -261,18 +266,6 @@ def give_up(state: State):
     if state.get("sql"):
         out.append({"type": "sql", "query": state["sql"]})
     out.append(blocks.suggestions(["What's in this file?"]))
-    return {"blocks": out}
-
-
-def show_result(state: State):
-    """Temporary stand-in for the answer node (part 3): show what ran and what came back."""
-    r = state["result"]
-    out = [blocks.text(state.get("explanation") or "Here is the result.")]
-    out += [blocks.notice(f"Assumption: {a}") for a in state.get("assumptions", [])]
-    out.append(blocks.table(r["columns"], r["rows"]) if r["rows"] else blocks.notice("The query returned no rows."))
-    if r["truncated"]:
-        out.append(blocks.notice(f"Showing the first {len(r['rows']):,} rows."))
-    out.append({"type": "sql", "query": state["sql"]})
     return {"blocks": out}
 
 
