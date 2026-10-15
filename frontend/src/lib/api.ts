@@ -143,12 +143,28 @@ export const api = {
   datasets: () => request<DatasetSummary[]>('/datasets/'),
   dataset: (id: number) => request<DatasetDetail>(`/datasets/${id}/`),
   deleteDataset: (id: number) => request<{ deleted: number }>(`/datasets/${id}/`, { method: 'DELETE' }),
-  upload: (file: File, name?: string) => {
-    const form = new FormData()
-    form.append('file', file)
-    if (name) form.append('name', name)
-    return request<DatasetSummary>('/datasets/', { method: 'POST', body: form })
-  },
+  // XHR rather than fetch: only XHR reports how much of a large file has been sent.
+  upload: (file: File, name: string | undefined, onProgress: (fraction: number) => void) =>
+    new Promise<DatasetSummary>((resolve, reject) => {
+      const form = new FormData()
+      form.append('file', file)
+      if (name) form.append('name', name)
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/datasets/')
+      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total)
+      xhr.onerror = () => reject(new ApiError('Cannot reach the server. Is the backend running?', 0))
+      xhr.onload = () => {
+        let body: { error?: string } | null = null
+        try {
+          body = JSON.parse(xhr.responseText)
+        } catch {
+          // non-JSON error page
+        }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(body as DatasetSummary)
+        else reject(new ApiError(body?.error ?? `The server returned ${xhr.status}.`, xhr.status))
+      }
+      xhr.send(form)
+    }),
   threads: (datasetId: number) => request<ThreadSummary[]>(`/datasets/${datasetId}/threads/`),
   newThread: (datasetId: number) => request<ThreadDetail>(`/datasets/${datasetId}/threads/`, { method: 'POST' }),
   thread: (id: string) => request<ThreadDetail>(`/threads/${id}/`),
