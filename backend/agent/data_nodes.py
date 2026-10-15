@@ -130,7 +130,10 @@ def after_schema(state: State):
 
 
 def explain_missing(state: State):
-    return {"blocks": [blocks.text(f"This file can't answer that. {state['error']}"),
+    missing = state["error"].strip().rstrip(".")
+    # The schema node may return a bare concept ("profit") or a sentence; make either read naturally.
+    reason = f"it has no data for {missing}" if len(missing.split()) <= 4 else missing[0].lower() + missing[1:]
+    return {"blocks": [blocks.text(f"This file can't answer that: {reason}. Nothing was guessed."),
                        blocks.suggestions(["What's in this file?"])]}
 
 
