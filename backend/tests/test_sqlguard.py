@@ -76,6 +76,10 @@ def test_limit_is_tightened_when_too_big():
     assert check("SELECT region FROM orders LIMIT 5000000", CATALOG).sql.endswith(f"LIMIT {ROW_CAP + 1}")
 
 
+def test_limit_at_the_cap_still_detects_truncation():
+    assert check(f"SELECT region FROM orders LIMIT {ROW_CAP}", CATALOG).sql.endswith(f"LIMIT {ROW_CAP + 1}")
+
+
 def test_small_limit_is_kept():
     assert check("SELECT region FROM orders ORDER BY net_amount DESC LIMIT 10", CATALOG).sql.endswith("LIMIT 10")
 

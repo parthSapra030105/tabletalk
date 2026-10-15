@@ -23,9 +23,13 @@ from .state import Context
 
 def show(state):
     print(f"  route: {state.get('route')}  ({state.get('route_reason')})")
+    if state.get("attempts"):
+        print(f"  failed attempts: {state['attempts']} (last error: {state.get('error')})")
     for b in state.get("blocks", []):
         if b["type"] in ("text", "notice"):
             print(f"  [{b['type']}] {b['content']}")
+        elif b["type"] == "sql":
+            print(f"  [sql] {b['query']}")
         elif b["type"] == "suggestions":
             print(f"  [suggestions] {' | '.join(b['options'])}")
         elif b["type"] == "table":
@@ -56,7 +60,10 @@ def main():
     if args.mermaid:
         print(graph.get_graph().draw_mermaid())
         return
-    context = Context(catalog=json.loads(Path(args.catalog).read_text(encoding="utf-8")))
+    glossary_path = Path(args.catalog).with_name(Path(args.catalog).stem + "_glossary.json")
+    glossary = json.loads(glossary_path.read_text(encoding="utf-8")) if glossary_path.exists() else {}
+    context = Context(catalog=json.loads(Path(args.catalog).read_text(encoding="utf-8")), glossary=glossary,
+                      save_glossary=lambda g: glossary_path.write_text(json.dumps(g, indent=2), encoding="utf-8"))
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 
     questions = args.question or iter(lambda: input("\n> ").strip(), "")

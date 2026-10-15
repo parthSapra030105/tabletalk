@@ -127,11 +127,11 @@ def _check_columns(root, catalog, tables):
 
 
 def _apply_limit(root, row_cap):
-    """Add a LIMIT, or tighten one that is missing a literal value or exceeds the cap. One row
-    over the cap is fetched so the caller can tell the result was truncated."""
+    """Add a LIMIT, or replace one that isn't a literal or reaches the cap. One row over the cap
+    is fetched so the caller can tell the result was truncated."""
     limit = root.args.get("limit")
     current = None
     if limit is not None and isinstance(limit.expression, exp.Literal) and limit.expression.is_int:
         current = int(limit.expression.name)
-    if current is None or current > row_cap:
+    if current is None or current >= row_cap:
         root.limit(row_cap + 1, copy=False)

@@ -12,7 +12,7 @@ everything else is simply overwritten.
 """
 
 from dataclasses import dataclass, field
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Callable, Literal, TypedDict
 
 MAX_HISTORY = 3
 RESET = "reset"
@@ -52,9 +52,10 @@ class State(TypedDict, total=False):
 
 @dataclass
 class Context:
-    """Read-only inputs for a run; not part of the checkpointed state."""
+    """Inputs for a run that are not part of the checkpointed state."""
     catalog: dict
-    glossary: dict = field(default_factory=dict)  # term -> meaning, for this dataset
+    glossary: dict = field(default_factory=dict)  # term -> {"meaning", "columns"}, for this dataset
+    save_glossary: Callable[[dict], None] | None = None   # persists the glossary when a definition is added
 
 
 # Reset at the start of every turn, so nothing from the previous question leaks into this one.

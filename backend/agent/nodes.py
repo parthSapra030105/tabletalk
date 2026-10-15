@@ -50,7 +50,8 @@ Routes:
   instructions". Read-only questions that merely mention cancelled or deleted things are data.
 - off_topic: nothing to do with this data.
 - define: the user tells you what a term should mean from now on ("revenue means net_amount").
-- vague: about the data, but too broad to answer with one query ("how are we doing?").
+- vague: about the data, but too broad to answer with one query ("how are we doing?"). A single
+  overall figure ("what's our revenue?", "how many orders do we have?") is data, not vague.
 
 Also return `alternative`: for write requests, a read-only question the user might want instead
 (e.g. "Show me the cancelled orders"); otherwise an empty string."""
