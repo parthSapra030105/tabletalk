@@ -1,14 +1,18 @@
 """
-Dry-run the ingest pipeline on a workbook and print the summary (no database).
+Run the ingest pipeline on a workbook and print the summary.
 
     cd backend
-    python -m ingest ../data/tabletalk_sample.xlsx --answer-key ../data/tabletalk_sample_answer_key.json
+    python -m ingest ../data/tabletalk_sample.xlsx --answer-key ../data/tabletalk_sample_answer_key.json          # dry run
+    python -m ingest ../data/tabletalk_sample.xlsx --answer-key ../data/tabletalk_sample_answer_key.json --load   # into Postgres
 """
 
 import argparse
 import json
 import sys
 import time
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from .pipeline import ingest_workbook
 
@@ -19,10 +23,18 @@ def main():
     parser.add_argument("path")
     parser.add_argument("--answer-key", help="check rows loaded against the generator's expected counts")
     parser.add_argument("--columns", action="store_true", help="print every column, not just notable ones")
+    parser.add_argument("--load", action="store_true", help="load into Postgres (DATABASE_URL from .env)")
     args = parser.parse_args()
 
     start = time.perf_counter()
-    reports = ingest_workbook(args.path)
+    if args.load:
+        from .postgres import load_workbook
+        load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+        progress = lambda sheet, done, total: print(f"  {sheet}: {done:,} of ~{total or 0:,} rows", flush=True)
+        schema, reports = load_workbook(args.path, progress=progress)
+        print(f"\nloaded into schema {schema}")
+    else:
+        reports = ingest_workbook(args.path)
     total = time.perf_counter() - start
 
     expected = {}
