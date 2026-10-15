@@ -13,18 +13,10 @@ import llm
 from catalog.render import compact_index
 
 from . import blocks
-from .state import TURN_DEFAULTS, Context, State
+from .state import TURN_DEFAULTS, Context, State, recent_context
 from .tools import list_tables
 
 ROUTES = ["data", "about_file", "write", "off_topic", "define", "vague"]
-
-
-def _last_turn(state):
-    history = state.get("history") or []
-    if not history:
-        return "none"
-    t = history[-1]
-    return json.dumps({"question": t["question"], "sql": t.get("sql")}, ensure_ascii=False)
 
 
 # --- start -------------------------------------------------------------------
@@ -67,7 +59,7 @@ def router(state: State, runtime: Runtime[Context]):
     tables = "\n".join(f"- {t['name']}: {t['description']}" for t in list_tables(runtime.context.catalog))
     messages = [
         {"role": "system", "content": ROUTER_SYSTEM},
-        {"role": "user", "content": f"Tables in the file:\n{tables}\n\nPrevious turn: {_last_turn(state)}\n\n"
+        {"role": "user", "content": f"Tables in the file:\n{tables}\n\nConversation so far: {recent_context(state)}\n\n"
                                     f"Message: {state['question']}"},
     ]
     out, usage = llm.structured("router", messages, ROUTER_SCHEMA, "route")

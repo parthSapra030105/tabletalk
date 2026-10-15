@@ -11,6 +11,7 @@ Reducers decide how a node's return value is merged into the state:
 everything else is simply overwritten.
 """
 
+import json
 from dataclasses import dataclass, field
 from typing import Annotated, Callable, Literal, TypedDict
 
@@ -61,3 +62,12 @@ class Context:
 # Reset at the start of every turn, so nothing from the previous question leaks into this one.
 TURN_DEFAULTS = {"route": None, "route_reason": None, "alternative": "", "selection": {}, "assumptions": [], "sql": None,
                  "explanation": None, "error": None, "attempts": 0, "result": None, "blocks": [], "usage": RESET}
+
+
+def recent_context(state):
+    """What a prompt gets of the conversation: the last few questions and the last SQL that ran.
+    Bounded, so the cost of a turn doesn't grow with the length of the chat."""
+    history = state.get("history") or []
+    last_sql = next((t["sql"] for t in reversed(history) if t.get("sql")), None)
+    return json.dumps({"recent_questions": [t["question"] for t in history],
+                       "last_sql_that_ran": last_sql}, ensure_ascii=False)

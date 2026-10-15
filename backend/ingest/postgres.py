@@ -20,6 +20,10 @@ from .pipeline import Sink, ingest_workbook
 READER_ROLE = "tabletalk_reader"
 
 
+class NoUsableSheet(Exception):
+    """No sheet in the workbook had a header row and data."""
+
+
 class PostgresSink(Sink):
     def __init__(self, conn, schema):
         self.conn = conn
@@ -75,6 +79,8 @@ def load_workbook(path, dsn=None, schema=None, progress=None):
                 conn.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(sql.Identifier(schema),
                                                                               sql.Identifier(READER_ROLE)))
                 reports = ingest_workbook(path, sink, progress)
+                if not any(r.status == "loaded" for r in reports):
+                    raise NoUsableSheet("; ".join(f"{r.sheet}: {r.reason}" for r in reports) or "no sheets")
             except BaseException as exc:
                 sink.abort(exc)
                 raise

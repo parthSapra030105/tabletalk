@@ -23,6 +23,17 @@ python scripts/setup_db.py    # once: needs a local PostgreSQL superuser; writes
 cd backend && python -m pytest    # includes tests that try to write through the reader role
 ```
 
+Then create the app tables and load a sample to chat with:
+
+```bash
+cd backend
+python manage.py migrate
+python manage.py load_sample          # ~100k rows, about a minute (add --full for ~1M rows)
+python manage.py runserver --noreload
+```
+
+`--noreload` keeps upload jobs alive. They run in a background thread, which an auto-reload restart would kill.
+
 ## Test workbook
 
 ```bash
@@ -101,3 +112,20 @@ At question time the model never gets the whole catalog. It gets a compact index
 | Whole catalog as JSON (the dump-everything approach) | 16,496 |
 | Compact index, sent every question | 1,833 |
 | Column details for "revenue by customer city" (6 columns) | 391 |
+
+## Cost per turn
+
+Each prompt carries the last three questions and the last SQL that ran, never the whole chat, so a turn costs about the same at turn 8 as at turn 1. These are real numbers from an 8-turn conversation on the 100k-row sample (`python manage.py token_report`; Gemini Flash; totals include reasoning tokens):
+
+| Turn | Question | Total tokens |
+|---|---|---|
+| 1 | What were total sales in March 2025, by region? | 5,109 |
+| 2 | Now just North and South | 5,466 |
+| 3 | What about February? | 5,553 |
+| 4 | Which product category sold the most in 2025? | 5,604 |
+| 5 | Show that by month | 6,235 |
+| 6 | Who are our top 5 customers by revenue? | 5,899 |
+| 7 | How many orders were cancelled last quarter? | 5,195 |
+| 8 | Compare that with the quarter before | 5,166 |
+
+A data question makes four model calls: router (~650 tokens), schema (~2,400, mostly the compact index), sql (~1,000) and answer (~1,350). A refused write request costs only the router (~650).

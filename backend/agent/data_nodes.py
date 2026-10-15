@@ -25,7 +25,7 @@ from catalog.render import column_details, compact_index
 
 from . import blocks
 from .sqlguard import QueryRejected, check
-from .state import Context, State
+from .state import Context, State, recent_context
 from .tools import run_query
 
 MAX_RETRIES = 2
@@ -43,14 +43,6 @@ def _relevant_glossary(glossary, question):
     return {term: g for term, g in glossary.items() if _mentions(question, term)}
 
 
-def _last_turn(state):
-    history = state.get("history") or []
-    if not history:
-        return "none"
-    t = history[-1]
-    return json.dumps({"question": t["question"], "sql": t.get("sql")}, ensure_ascii=False)
-
-
 # --- schema --------------------------------------------------------------------
 
 SCHEMA_SYSTEM = """You prepare a question about a spreadsheet for SQL generation. From the catalog,
@@ -59,8 +51,8 @@ and every column needed for filters, grouping and ordering). When the answer tot
 sales or orders, also pick the status column if one exists, so cancelled rows can be left out.
 Keep the pick small.
 
-If the previous turn is a question this one follows on from ("now just for North", "what about last
-year?"), pick what the combined question needs.
+If this question follows on from the recent questions ("now just for North", "what about last
+year?"), pick what the combined question needs; the last SQL that ran shows what was asked before.
 
 SQL will compute any total, count, average, ranking, trend, growth rate or comparison from the raw
 rows, so never require a column that already holds the aggregate: a date column plus an amount
@@ -94,7 +86,7 @@ def schema(state: State, runtime: Runtime[Context]):
     glossary = _relevant_glossary(runtime.context.glossary, state["question"])
     prompt = (f"<catalog>\n{compact_index(catalog)}\n</catalog>\n\n"
               f"glossary: {json.dumps(glossary, ensure_ascii=False) if glossary else 'none'}\n"
-              f"previous turn: {_last_turn(state)}\n\nquestion: {state['question']}")
+              f"conversation so far: {recent_context(state)}\n\nquestion: {state['question']}")
     out, usage = llm.structured("schema", [{"role": "system", "content": SCHEMA_SYSTEM},
                                            {"role": "user", "content": prompt}], SCHEMA_SCHEMA, "schema_pick")
 
@@ -171,7 +163,7 @@ tables and columns described below (tables need no schema prefix).
 - Relative periods ("this quarter", "last 6 months") are relative to the latest date in the data,
   not today. A quarter or month named without a year ("Q2", "March") means the most recent one that
   lies fully inside the data's date range. Say which period you used in assumptions.
-- If the previous turn's SQL is given and this is a follow-up, build on it.
+- If this is a follow-up to the recent questions, build on the last SQL that ran.
 - If an error from a previous attempt is given, fix exactly that problem.
 - `explanation`: one plain sentence on what the query computes. `assumptions`: only new choices
   not already listed under "decided already" (usually none), one short sentence each.
@@ -196,7 +188,7 @@ def sql(state: State, runtime: Runtime[Context]):
         parts.append("glossary (the user's definitions): " + json.dumps(glossary, ensure_ascii=False))
     if state.get("assumptions"):
         parts.append("decided already: " + "; ".join(state["assumptions"]))
-    parts.append(f"previous turn: {_last_turn(state)}")
+    parts.append(f"conversation so far: {recent_context(state)}")
     if state.get("error") and state.get("attempts"):
         parts.append(f"your previous attempt:\n{state.get('sql')}\nfailed with: {state['error']}")
     parts.append(f"question: {state['question']}")

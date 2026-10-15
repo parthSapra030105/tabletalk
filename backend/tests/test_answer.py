@@ -48,3 +48,8 @@ def test_formats():
     assert fmt(1234567, "number") == "12,34,567"
     assert fmt(12.345, "percent") == "12.3%"
     assert fmt(None, "inr") == "no value"
+
+
+def test_a_placeholder_in_an_unknown_shape_drops_its_sentence():
+    text, dropped = grounded_text("Sales were {{first_rows[0][1]|inr}}. {{region[0]|text}} led.", RESULT, "q")
+    assert text == "North led." and dropped == 1

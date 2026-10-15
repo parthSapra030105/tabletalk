@@ -4,3 +4,4 @@ __pycache__/
 .env
 data/*.xlsx
 data/*.json
+data/uploads/
