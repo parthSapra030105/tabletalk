@@ -95,12 +95,13 @@ I tested that wall 3 holds even when wall 2 is bypassed. A session can switch it
 My first memory was "the previous turn" only. A delete attempt between two sales questions made "what about February?" lose its regions. It now keeps the last three questions plus the last SQL that ran.
 
 **Still fuzzy:**
-- **How consistently the model reads loose phrases.** "Growing fastest over the last 6 months" was once computed as 3 months vs 3 months. The assumption is always shown, but I haven't measured how often the readings differ. That's what the eval script would do.
+- **How consistently the model reads loose phrases.** "Growing fastest over the last 6 months" was once computed as 3 months vs 3 months. The assumption is always shown, but I don't know how often the readings differ.
+  - The eval (`manage.py eval`, 10/10 against the generator's answer key) showed this sharply. "Which category grew the most?" was answered as the largest rupee increase (Wearables), while the key measured percentage growth (Kitchen Appliances, +69% from a small base). Both readings are fair.
+  - I made the eval question say "percentage", because an eval should test the SQL, not guess the reader. The real fix would be to treat "grew the most" like gross vs net: flag it as ambiguous and disclose the reading.
 - **The join-detection threshold.** It's a 95% value overlap on a 200-value sample, with name hints for numeric keys. It works on this data, but I haven't tested it on files with numeric IDs that overlap by coincidence.
 
 ## What didn't you get to, and how would you approach it?
 
-- **Eval script (P2).** The generator already writes `answer_key.json` with the true figures. I'd score 10 questions automatically and run it on every prompt change.
 - **MCP server (P2).** The three tools already live in one module, with the safety inside `run_query`, so exposing them over MCP needs no new safety work.
 - **Streaming (P2).** I'd stream LangGraph node updates over server-sent events, so the UI shows the SQL, then the table, then the explanation as each is ready.
 - **Several files at once (P2).** The router would gain a "which dataset?" step, choosing from each dataset's one-line table descriptions.

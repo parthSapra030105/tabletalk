@@ -6,7 +6,7 @@ The model never reads the data. It sees a compact description of the data, picks
 
 - **Stack:** LangGraph · Django · React (Vite, Tailwind, shadcn/ui, Recharts) · PostgreSQL
 - **Design write-up:** [NOTES.md](NOTES.md)
-- **Attack results:** [docs/safety-report.md](docs/safety-report.md)
+- **Attack results:** [docs/safety-report.md](docs/safety-report.md) · **Accuracy:** [docs/eval-report.md](docs/eval-report.md)
 
 ## What's built
 
@@ -20,7 +20,8 @@ The model never reads the data. It sees a compact description of the data, picks
 | P0 | End-to-end answers with real numbers; 3+ UI block types including a chart | ✅ 7 block types |
 | P1 | Clickable suggestions, follow-ups, token logging, upload progress, clear errors for bad files | ✅ |
 | P1 | Checkpointer (chats survive refresh and restart), questions that join sheets | ✅ |
-| P2 | MCP server, streaming, eval script, choosing between files | Not done; see [NOTES.md](NOTES.md) |
+| P2 | Eval script: 10 questions scored against the generator's answer key | ✅ 10/10 ([report](docs/eval-report.md)) |
+| P2 | MCP server, streaming, choosing between files | Not done; see [NOTES.md](NOTES.md) |
 
 ## Quick start
 
@@ -57,6 +58,7 @@ Open http://localhost:5173, choose the sample dataset, and ask *"What were total
 cd backend
 python -m pytest                       # 107 tests, including writes attempted through the read-only role
 python manage.py safety_check          # the brief's attack list end to end; rewrites docs/safety-report.md
+python manage.py eval                  # 10 questions with known answers; rewrites docs/eval-report.md
 python manage.py token_report          # tokens per turn for the latest chat
 ```
 
