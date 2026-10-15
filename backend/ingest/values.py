@@ -28,11 +28,20 @@ _MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun",
                                         "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
 
 
+_NULLS = NULL_TOKENS | {""}
+_CURRENCY = re.compile(r"[₹$€£]|\b(?:rs\.?|inr|usd|eur|gbp)(?=\s|\d|$)", re.IGNORECASE)
+
+
 def is_null(v):
-    return v is None or (isinstance(v, str) and v.strip().lower() in NULL_TOKENS | {""})
+    return v is None or (isinstance(v, str) and v.strip().lower() in _NULLS)
 
 
 def parse_number(v):
+    """
+    Numbers as Excel stores them, or as text: '1,24,500.00', '₹6,499', '$1,234',
+    'Rs. 500', '12%', and '(1,234)' for an accounting-style negative.
+    Returns int / float, or None if it isn't a number.
+    """
     if isinstance(v, bool):
         return None
     if isinstance(v, (int, float)):
@@ -40,13 +49,20 @@ def parse_number(v):
     if not isinstance(v, str):
         return None
     s = v.strip()
-    # A leading '+' or leading zero means an identifier (phone, pincode, code), not a quantity.
-    if s.startswith("+") or (len(s) > 1 and s[0] == "0" and s[1].isdigit()):
+    # A leading '+' means an identifier such as a phone number, not a quantity.
+    if s.startswith("+"):
         return None
-    s = s.replace("₹", "").replace("Rs.", "").replace(",", "").replace(" ", "").removesuffix("%")
+    negative = s.startswith("(") and s.endswith(")")
+    if negative:
+        s = s[1:-1]
+    s = _CURRENCY.sub("", s).replace(",", "").replace(" ", "").removesuffix("%")
+    # A leading zero (0123, 007) means a code or pincode, not a quantity.
+    if len(s) > 1 and s[0] == "0" and s[1].isdigit():
+        return None
     if not _NUMBER.match(s):
         return None
-    return float(s) if "." in s else int(s)
+    n = float(s) if "." in s else int(s)
+    return -n if negative else n
 
 
 def parse_bool(v):
