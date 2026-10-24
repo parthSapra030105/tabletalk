@@ -363,8 +363,9 @@ export default function DatasetPage() {
 
             <TabsContent value="report" className="space-y-4">
               <SectionHeader title="Sheets found" count={d.sheets.length} right={d.timings.describe_seconds ? `Descriptions written in ${d.timings.describe_seconds}s` : undefined} />
-              {d.sheets.map((s) => (
-                <SheetCard key={s.sheet} sheet={s} />
+              {d.sheets.map((s, i) => (
+                // A sheet can hold several tables, so the sheet name alone isn't unique.
+                <SheetCard key={`${s.sheet}-${s.table ?? i}`} sheet={s} />
               ))}
             </TabsContent>
 

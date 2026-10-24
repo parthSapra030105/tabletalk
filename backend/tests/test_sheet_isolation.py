@@ -21,8 +21,8 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 APP_URL = os.environ.get("DATABASE_URL")
 
 
-def _workbook(path, far_column=2000):
-    """Two good sheets with a 'Wide' sheet between them, which has a stray cell far to the right."""
+def _workbook(path, wide_columns=2000):
+    """Two good sheets with a 'Wide' sheet between them, whose table has `wide_columns` columns."""
     wb = openpyxl.Workbook()
     good = wb.active
     good.title = "Good"
@@ -30,9 +30,9 @@ def _workbook(path, far_column=2000):
     good.append(["North", 100])
     good.append(["South", 250])
     wide = wb.create_sheet("Wide")
-    wide.append(["name", "value"])
-    wide.append(["a", 1])
-    wide.cell(row=2, column=far_column, value="stray note")
+    wide.append([f"c{i}" for i in range(wide_columns)])
+    wide.append(list(range(wide_columns)))
+    wide.append(list(range(wide_columns)))
     last = wb.create_sheet("Also good")
     last.append(["city", "visits"])
     last.append(["Pune", 7])
@@ -63,7 +63,7 @@ def test_a_sheet_that_fails_in_the_sink_is_skipped_and_the_rest_load(tmp_path):
             self.aborted.append(str(exc))
 
     sink = FailsOnWide()
-    reports = _by_sheet(ingest_workbook(_workbook(tmp_path / "wb.xlsx", far_column=5), sink))
+    reports = _by_sheet(ingest_workbook(_workbook(tmp_path / "wb.xlsx", wide_columns=3), sink))
     assert reports["Wide"].status == "skipped"
     assert reports["Wide"].reason == "couldn't be loaded: disk on fire"
     assert reports["Wide"].table is None and reports["Wide"].rows_loaded == 0

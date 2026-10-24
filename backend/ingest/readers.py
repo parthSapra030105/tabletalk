@@ -56,16 +56,27 @@ class WorkbookReader:
     def rows(self, sheet: SheetInfo):
         """Yield normalised row tuples for one sheet."""
         if self.reader_for(sheet) == "calamine":
-            if self._calamine is None:
-                self._calamine = CalamineWorkbook.from_path(self.path)
-            cs = self._calamine.get_sheet_by_name(sheet.name)
-            rows = (tuple(_normalise(v) for v in row) for row in cs.iter_rows())
-            # calamine yields rows from Excel row 1, but columns from the first used column.
-            origin = (0, cs.start[1] if cs.start else 0)
-            yield from _fill_merged_down(rows, cs.merged_cell_ranges or [], origin)
+            yield from self._calamine_rows(sheet)[0]
         else:
             for row in self._openpyxl[sheet.name].iter_rows(values_only=True):
                 yield tuple(_normalise(v) for v in row)
+
+    def grid(self, sheet: SheetInfo):
+        """
+        The whole sheet as a list of rows, plus the 0-based Excel column of the rows'
+        first cell (calamine skips empty columns on the left). Calamine sheets only.
+        """
+        rows, first_col = self._calamine_rows(sheet)
+        return list(rows), first_col
+
+    def _calamine_rows(self, sheet):
+        if self._calamine is None:
+            self._calamine = CalamineWorkbook.from_path(self.path)
+        cs = self._calamine.get_sheet_by_name(sheet.name)
+        rows = (tuple(_normalise(v) for v in row) for row in cs.iter_rows())
+        # calamine yields rows from Excel row 1, but columns from the first used column.
+        first_col = cs.start[1] if cs.start else 0
+        return _fill_merged_down(rows, cs.merged_cell_ranges or [], (0, first_col)), first_col
 
     def close(self):
         self._openpyxl.close()
