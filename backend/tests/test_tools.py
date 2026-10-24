@@ -55,7 +55,8 @@ def fingerprint():
 
 
 def test_list_and_describe_come_from_the_catalog():
-    assert list_tables(CATALOG)[0] == {"name": "orders", "rows": 200, "description": "One row per order."}
+    assert list_tables(CATALOG)[0] == {"name": "orders", "sheet": "", "hidden": False, "rows": 200,
+                                       "description": "One row per order."}
     region = describe_table(CATALOG, "orders")["columns"][1]
     assert region["values"] == ["North", "South"]
 

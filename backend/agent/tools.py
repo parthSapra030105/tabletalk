@@ -35,7 +35,8 @@ class QueryResult:
 
 
 def list_tables(catalog):
-    return [{"name": t["name"], "rows": t["row_count"], "description": t.get("description", "")}
+    return [{"name": t["name"], "sheet": t.get("sheet", ""), "hidden": t.get("hidden", False), "rows": t["row_count"],
+             "description": t.get("description", "")}
             for t in catalog["tables"]]
 
 

@@ -54,6 +54,14 @@ Keep the pick small.
 If this question follows on from the recent questions ("now just for North", "what about last
 year?"), pick what the combined question needs; the last SQL that ran shows what was asked before.
 
+A workbook can hold several similar tables: versions of one plan, one table per platform, or a
+summary table that already totals the others. Pick the single table that best answers the question,
+and don't combine figures from several tables unless the question asks for that; adding a summary
+to its own detail counts everything twice. Tables marked "hidden sheet" come from sheets hidden in
+Excel, often older versions or working copies: prefer a visible table unless the question names that
+sheet or only a hidden table has the data. When several tables could answer, say which one you used
+in `assumptions`.
+
 SQL will compute any total, count, average, ranking, trend, growth rate or comparison from the raw
 rows, so never require a column that already holds the aggregate: a date column plus an amount
 column is enough for monthly sales, growth or "last 6 months". Set answerable to false only when a
@@ -166,6 +174,8 @@ tables and columns described below (tables need no schema prefix).
   says otherwise. Say so in assumptions.
 - Never wrap an aggregate in COALESCE(..., 0): if nothing matches, the result must stay empty so it
   can be reported as "no data" rather than as a real zero.
+- A column "stored as a fraction" holds a percentage as a share of 1 (0.25 means 25%). Multiply it by
+  100 in the SELECT when returning it as a percentage, and name the alias with _pct.
 - Aggregate in SQL; return the rows a person would want to see (usually under 50), with readable
   snake_case aliases. Round money to 2 decimals. Order the rows meaningfully.
 - Relative periods ("this quarter", "last 6 months") are relative to the latest date in the data,

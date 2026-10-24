@@ -119,6 +119,8 @@ class ColumnType:
             return None, False
         t = self.sql_type
         if t == "text":
+            if isinstance(v, float) and v.is_integer():
+                v = int(v)                 # Excel stores 380054 as 380054.0
             s = " ".join(str(v).split())
             if self.categories:
                 key = s.casefold()

@@ -2,9 +2,10 @@
 Turn the stored catalog into prompt text, in two sizes.
 
 compact_index(catalog)
-    Always sent to the Schema node. Every table with its row count and description,
-    every column with a type tag and its one-line description, the joins, and the
-    ambiguity flags. No stats, no cell values. Runs of columns that differ only by
+    Always sent to the Schema node. Every table with its row count, description and
+    whether its sheet is hidden, every column with a type tag and its one-line
+    description, the joins, and the ambiguity flags. No stats, no cell values (a
+    table's title is cell text, so it only appears in column_details). Runs of columns that differ only by
     a period suffix (sales_amt_apr_24 ... sales_amt_mar_26) collapse into one line.
 
 column_details(catalog, selection)
@@ -43,7 +44,8 @@ def _column_lines(table):
     for c in cols:
         s = in_group.get(c["name"])
         if s is None:
-            lines.append(f"  {c['name']} ({TYPE_TAG[c['type']]}): {c.get('description', '')}")
+            tag = TYPE_TAG[c["type"]] + (", fraction of 1" if c.get("fraction") else "")
+            lines.append(f"  {c['name']} ({tag}): {c.get('description', '')}")
         elif s not in emitted:
             g = grouped[s]
             emitted.add(s)
@@ -55,7 +57,8 @@ def _column_lines(table):
 def compact_index(catalog):
     out = []
     for t in catalog["tables"]:
-        out.append(f"{t['name']} ({t['row_count']:,} rows): {t.get('description', '')}")
+        hidden = ", hidden sheet" if t.get("hidden") else ""
+        out.append(f"{t['name']} ({t['row_count']:,} rows{hidden}): {t.get('description', '')}")
         out += _column_lines(t)
     if catalog["joins"]:
         out.append("joins:")
@@ -75,7 +78,8 @@ def column_details(catalog, selection):
         t = tables.get(tname)
         if t is None:
             continue
-        out.append(f"{t['name']} ({t['row_count']:,} rows)")
+        title = f", titled \"{t['title']}\" on sheet \"{t['sheet']}\"" if t.get("title") else ""
+        out.append(f"{t['name']} ({t['row_count']:,} rows{title})")
         cols = {c["name"]: c for c in t["columns"]}
         for name in wanted:
             c = cols.get(name)
@@ -86,6 +90,8 @@ def column_details(catalog, selection):
                 parts.append(f"{c['null_pct']}% empty")
             if "min" in c:
                 parts.append(f"range {c['min']} to {c['max']}")
+            if c.get("fraction"):
+                parts.append("stored as a fraction: 0.25 means 25%")
             if "top_values" in c:
                 values = [v for v, _ in c["top_values"][:DETAIL_VALUES_MAX]]
                 parts.append("values exactly: " + ", ".join(repr(v) for v in values))

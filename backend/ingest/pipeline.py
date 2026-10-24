@@ -39,6 +39,9 @@ BLOCK_CELL_LIMIT = 2_000_000   # sheets up to this many cells are read whole and
 log = logging.getLogger(__name__)
 
 _TOTAL_ROW = re.compile(r"^\s*(grand\s*|sub\s*)?totals?\b", re.IGNORECASE)
+# Numbers that are labels, not quantities: summing or averaging them means nothing, and they can
+# hold several codes in one cell ("411001 + 411002"). They are stored as text.
+_IDENTIFIER = re.compile(r"(^|_)(pin|pins|pincodes?|pin_codes?|zip|zipcodes?|postcodes?|postal_codes?|phone|mobile)($|_)")
 
 
 @dataclass
@@ -70,6 +73,7 @@ class SheetReport:
     range: str | None = None          # the cells the table came from, e.g. "B3:P58"
     title: str | None = None          # text above the table on the sheet
     notes: list = field(default_factory=list)                 # notes typed around the table
+    hidden: bool = False              # the sheet is hidden in Excel
     header_row: int | None = None     # 1-based, as Excel shows it
     rows_loaded: int = 0
     skipped_rows: dict = field(default_factory=dict)          # reason -> {"count", "examples": [excel rows]}
@@ -118,6 +122,8 @@ def ingest_workbook(path, sink=None, progress=None):
                 log.exception("sheet %r couldn't be split into tables", info.name)
                 tables, skipped = [], [SheetReport(sheet=info.name, reader=reader.reader_for(info), status="skipped",
                                                    reason=f"couldn't be loaded: {_first_line(exc)}")]
+            for r in [t.report for t in tables] + skipped:
+                r.hidden = info.hidden
             for t in tables:
                 start = time.perf_counter()
                 try:
@@ -216,7 +222,10 @@ def _load_table(t, sink, used_tables, progress, info):
     for i, name in enumerate(names):
         original = header[i] if i < len(header) else None
         values = [r[i] for r in sample_rows if not is_null(r[i])]
-        columns.append(Column(name, None if original is None else str(original), infer_type(values)))
+        kind = infer_type(values)
+        if kind.sql_type == "numeric" and _IDENTIFIER.search(name):
+            kind = ColumnType("text")
+        columns.append(Column(name, None if original is None else str(original), kind))
     col_reports = [ColumnReport(c.name, c.original, c.type.sql_type) for c in columns]
     for c, cr in zip(columns, col_reports):
         if c.type.ambiguous_day_month:

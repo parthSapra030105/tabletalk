@@ -16,6 +16,7 @@ import { formatCompact, formatCount } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const th = 'px-4 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground'
+const badge = 'rounded-md bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground'
 const td = 'px-4 py-2.5 align-top'
 const PREVIEW_COLUMNS = 12
 
@@ -62,12 +63,18 @@ function SheetCard({ sheet }: { sheet: SheetReport }) {
   const [open, setOpen] = useState(false)
   if (sheet.status === 'skipped') {
     return (
-      <div className="flex items-center justify-between rounded-xl border bg-card px-5 py-4">
-        <div>
-          <p className="font-medium">{sheet.sheet}</p>
+      <div className="flex items-center justify-between gap-3 rounded-xl border bg-card px-5 py-4">
+        <div className="min-w-0">
+          <p className="font-medium">
+            {sheet.sheet}
+            {sheet.range && <span className="font-normal text-muted-foreground"> · cells {sheet.range}</span>}
+          </p>
           <p className="text-xs text-muted-foreground">Not loaded: {sheet.reason}</p>
         </div>
-        <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">Skipped</span>
+        <div className="flex shrink-0 gap-1.5">
+          {sheet.hidden && <span className={badge}>Hidden sheet</span>}
+          <span className={badge}>Skipped</span>
+        </div>
       </div>
     )
   }
@@ -82,10 +89,20 @@ function SheetCard({ sheet }: { sheet: SheetReport }) {
           <p className="font-medium">
             {sheet.sheet} <span className="font-normal text-muted-foreground">→</span>{' '}
             <code className="font-mono text-sm text-primary">{sheet.table}</code>
+            {sheet.hidden && <span className={`${badge} ml-2 align-middle`}>Hidden sheet</span>}
           </p>
+          {sheet.title && <p className="mt-0.5 truncate text-sm text-muted-foreground">{sheet.title}</p>}
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Header found on row {sheet.header_row}
-            {sheet.header_row && sheet.header_row > 1 ? ` (${sheet.header_row - 1} title or blank row${sheet.header_row > 2 ? 's' : ''} above it ignored)` : ''}
+            {sheet.range ? (
+              <>
+                Cells {sheet.range} · header on row {sheet.header_row}
+              </>
+            ) : (
+              <>
+                Header found on row {sheet.header_row}
+                {sheet.header_row && sheet.header_row > 1 ? ` (${sheet.header_row - 1} title or blank row${sheet.header_row > 2 ? 's' : ''} above it ignored)` : ''}
+              </>
+            )}
             {' · '}
             {sheet.columns.length} columns
           </p>
@@ -105,6 +122,17 @@ function SheetCard({ sheet }: { sheet: SheetReport }) {
             <p key={reason} className="text-amber-800/80 dark:text-amber-300/80">
               <span className="tabular-nums">{formatCount(s.count)}</span> × {reason}
               <span className="text-xs"> (e.g. row{s.examples.length > 1 ? 's' : ''} {s.examples.join(', ')})</span>
+            </p>
+          ))}
+        </div>
+      )}
+
+      {sheet.notes?.length > 0 && (
+        <div className="mx-5 mb-4 space-y-1 rounded-lg bg-muted/50 px-4 py-3 text-sm">
+          <p className="eyebrow">Notes on the sheet, not loaded as data</p>
+          {sheet.notes.map((n, i) => (
+            <p key={i} className="text-muted-foreground">
+              {n}
             </p>
           ))}
         </div>

@@ -26,7 +26,9 @@ JOIN_SAMPLE = 200                # distinct values from a candidate column check
 JOIN_MIN_OVERLAP = 0.95
 KEY_MIN_DISTINCT = 10
 NUMERIC_JOIN_MIN_DISTINCT = 50
+PARALLEL_MIN_SHARED = 0.5        # tables sharing this share of their column names are parallel, not related
 _ID_HINT = re.compile(r"(^|_)(id|code|no|num|key|ref|sku)($|_)|id$")
+_PERCENT_HINT = re.compile(r"(^|_)(pct|percent|percentage|ctr|vtr|cvr|share|rate)($|_)")
 
 
 def build_catalog(conn, schema, reports):
@@ -87,6 +89,8 @@ def _profile_table(conn, schema, report):
             col["min"], col["max"] = _plain(next(values)), _plain(next(values))
         if c.type == "numeric":
             col["whole_numbers"] = bool(next(values))
+            if _is_fraction(c, col):
+                col["fraction"] = True
         col["is_key"] = (non_null == row_count and distinct == row_count and distinct >= KEY_MIN_DISTINCT
                          and c.type in ("text", "numeric") and col.get("whole_numbers", True))
         if 0 < distinct <= TOP_VALUES_MAX_DISTINCT:
@@ -97,8 +101,19 @@ def _profile_table(conn, schema, report):
             col["ingest_note"] = c.note
         columns.append(col)
 
-    return {"name": report.table, "sheet": report.sheet, "row_count": row_count,
-            "skipped_rows": {k: v["count"] for k, v in report.skipped_rows.items()}, "columns": columns}
+    table_entry = {"name": report.table, "sheet": report.sheet, "row_count": row_count,
+                   "skipped_rows": {k: v["count"] for k, v in report.skipped_rows.items()}, "columns": columns}
+    # Where the table sits in the workbook. Titles and notes are cell text: data, like any value.
+    for key in ("range", "title", "notes", "hidden"):
+        if getattr(report, key, None):
+            table_entry[key] = [_plain(n) for n in report.notes] if key == "notes" else _plain(getattr(report, key))
+    return table_entry
+
+
+def _is_fraction(report_column, col):
+    """A percentage stored as a share of 1 (0.25 for 25%), as Excel does under a % format."""
+    named = "%" in (report_column.original or "") or _PERCENT_HINT.search(col["name"])
+    return bool(named) and col["min"] is not None and 0 <= col["min"] and col["max"] <= 1
 
 
 def _top_values(conn, table, column):
@@ -120,8 +135,17 @@ def _find_joins(conn, schema, tables, keys):
     A join is column A -> key column B (in another table) when nearly all of A's values exist in B.
     Names are ignored for text columns (they differ across sheets on purpose: cust_id vs customerid).
     Numeric columns also need an id-like name, otherwise counts such as qty = 1..10 would "match" a numeric id.
+    Tables sharing most of their columns are parallel (versions of one plan, one per platform), not
+    related: their city or pincode columns overlap, but joining them would mix two plans together.
     """
     joins = []
+    names = {t["name"]: {c["name"] for c in t["columns"]} for t in tables}
+
+    def parallel(a, b):
+        # At least two shared columns: a small lookup table shares just its key with the table using it.
+        shared = len(names[a["name"]] & names[b["name"]])
+        return shared >= 2 and shared >= PARALLEL_MIN_SHARED * min(len(names[a["name"]]), len(names[b["name"]]))
+
     for t in tables:
         for c in t["columns"]:
             if c["type"] not in ("text", "numeric") or c["distinct"] < 2:
@@ -131,7 +155,7 @@ def _find_joins(conn, schema, tables, keys):
                 continue
             sample = None
             for kt, kc in keys:
-                if kt is t or kc["type"] != c["type"] or c["distinct"] > kc["distinct"]:
+                if kt is t or kc["type"] != c["type"] or c["distinct"] > kc["distinct"] or parallel(t, kt):
                     continue
                 if sample is None:
                     sample = [v for (v,) in conn.execute(

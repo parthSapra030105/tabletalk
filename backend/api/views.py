@@ -69,6 +69,7 @@ def dataset_detail(ds):
     out["sheets"] = [{
         "sheet": r["sheet"], "table": r["table"], "status": r["status"], "reason": r["reason"],
         "header_row": r["header_row"], "rows_loaded": r["rows_loaded"], "skipped_rows": r["skipped_rows"],
+        "range": r.get("range"), "title": r.get("title"), "notes": r.get("notes", []), "hidden": r.get("hidden", False),
         "columns": [{"name": c["name"], "original": c["original"], "type": c["type"], "nulls": c["nulls"],
                      "coercion_failures": c["coercion_failures"], "failure_examples": c["failure_examples"],
                      "note": c["note"]} for c in r["columns"]],

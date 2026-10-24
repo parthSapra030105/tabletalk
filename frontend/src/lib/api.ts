@@ -22,6 +22,10 @@ export interface SheetReport {
   status: 'loaded' | 'skipped'
   reason: string | null
   header_row: number | null
+  range: string | null // cells the table came from; null for datasets loaded before tables were split
+  title: string | null
+  notes: string[]
+  hidden: boolean
   rows_loaded: number
   skipped_rows: Record<string, { count: number; examples: number[] }>
   columns: {

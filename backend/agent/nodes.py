@@ -93,8 +93,9 @@ def redirect(state: State, runtime: Runtime[Context]):
 
 DESCRIBE_SYSTEM = """You answer questions about the structure of an uploaded spreadsheet, using only
 the catalog below. Keep it to two or three sentences. Copy any number exactly as it appears in the
-catalog; never compute or estimate one. Also list the tables whose columns should be shown to the
-user (an empty list if a list of tables answers the question)."""
+catalog; never compute or estimate one. Tables marked "hidden sheet" are on sheets hidden in Excel;
+mention that when it matters. Also list the tables whose columns should be shown to the user (an
+empty list if a list of tables answers the question)."""
 
 DESCRIBE_SCHEMA = {
     "type": "object", "additionalProperties": False, "required": ["answer", "tables"],
@@ -124,8 +125,9 @@ def describe(state: State, runtime: Runtime[Context]):
         result.append(blocks.table(["column", "original header", "type", "meaning"],
                                    [[c["name"], c["original"], c["type"], c.get("description", "")] for c in t["columns"]]))
     if not shown:
-        result.append(blocks.table(["table", "rows", "what one row is"],
-                                   [[t["name"], t["rows"], t["description"]] for t in list_tables(catalog)]))
+        result.append(blocks.table(["table", "sheet", "rows", "what one row is"],
+                                   [[t["name"], t["sheet"] + (" (hidden)" if t["hidden"] else ""), t["rows"],
+                                     t["description"]] for t in list_tables(catalog)]))
     if dropped:
         result.append(blocks.notice("Part of the answer was removed because it contained a number "
                                     "that isn't in the catalog."))

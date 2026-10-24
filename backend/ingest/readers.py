@@ -32,6 +32,7 @@ class SheetInfo:
     name: str
     rows: int | None      # from the file's metadata; None if the file doesn't record it
     cols: int | None
+    hidden: bool = False  # hidden in Excel: often an older version or a working copy
 
     @property
     def cells(self):
@@ -46,7 +47,8 @@ class WorkbookReader:
         self._calamine = None
 
     def sheets(self):
-        return [SheetInfo(ws.title, ws.max_row, ws.max_column) for ws in self._openpyxl.worksheets]
+        return [SheetInfo(ws.title, ws.max_row, ws.max_column, hidden=ws.sheet_state != "visible")
+                for ws in self._openpyxl.worksheets]
 
     def reader_for(self, sheet: SheetInfo):
         if sheet.cells is not None and sheet.cells <= self.cell_budget:
