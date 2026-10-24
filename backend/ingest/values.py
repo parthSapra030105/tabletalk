@@ -11,7 +11,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
-NULL_TOKENS = {"n/a", "na", "-", "--", "null", "none", "nil", "#n/a", "#value!", "#div/0!", "#ref!", "?"}
+NULL_TOKENS = {"n/a", "na", "-", "--", "_", "null", "none", "nil", "#n/a", "#value!", "#div/0!", "#ref!", "?"}
 TRUE_TOKENS = {"y", "yes", "true"}
 FALSE_TOKENS = {"n", "no", "false"}
 TYPE_THRESHOLD = 0.95            # share of sample values that must parse for a column to get the type
