@@ -2,8 +2,9 @@
 Load a workbook into Postgres.
 
 One schema per upload (ds_1, ds_2, ...), one table per sheet, rows streamed in
-with COPY. The whole workbook loads inside one transaction: if any sheet fails,
-nothing is committed, so a half-loaded dataset can never be queried.
+with COPY. The whole workbook loads inside one transaction, so a half-loaded
+dataset can never be queried. Each table gets its own savepoint inside it: a
+sheet that fails is rolled back and reported as skipped, and the others still load.
 
 The read-only role gets USAGE on the schema and SELECT on each table, nothing more.
 """
@@ -29,11 +30,14 @@ class PostgresSink(Sink):
         self.conn = conn
         self.schema = schema
         self._cur = conn.cursor()
+        self._savepoint = None
         self._copy_ctx = None
         self._copy = None
 
     def begin_table(self, table, columns):
         self._table = sql.Identifier(self.schema, table)
+        self._savepoint = self.conn.transaction()
+        self._savepoint.__enter__()
         # sql_type comes from a fixed set in values.ColumnType, never from the file.
         cols = sql.SQL(", ").join(sql.SQL("{} {}").format(sql.Identifier(c.name), sql.SQL(c.type.sql_type))
                                   for c in columns)
@@ -50,15 +54,24 @@ class PostgresSink(Sink):
         self._copy_ctx = self._copy = None
         self._cur.execute(sql.SQL("ANALYZE {}").format(self._table))
         self._cur.execute(sql.SQL("GRANT SELECT ON {} TO {}").format(self._table, sql.Identifier(READER_ROLE)))
+        self._savepoint.__exit__(None, None, None)
+        self._savepoint = None
 
-    def abort(self, exc):
-        """End an in-flight COPY so the transaction can roll back cleanly."""
+    def abort_table(self, exc):
+        """End an in-flight COPY, then roll back to this table's savepoint."""
         if self._copy_ctx is not None:
             try:
                 self._copy_ctx.__exit__(type(exc), exc, exc.__traceback__)
             except Exception:
                 pass
             self._copy_ctx = self._copy = None
+        if self._savepoint is not None:
+            self._savepoint.__exit__(type(exc), exc, exc.__traceback__)
+            self._savepoint = None
+
+    def abort(self, exc):
+        """Clean up so the whole workbook's transaction can roll back."""
+        self.abort_table(exc)
 
 
 def next_schema_name(conn):

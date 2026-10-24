@@ -12,6 +12,7 @@ The sink decides where rows go (a Postgres COPY, or just a counter in a dry run)
 Memory stays bounded by the reader, the sample, the chunk size and one hash per row.
 """
 
+import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -24,6 +25,9 @@ from .values import ColumnType, infer_type, is_null
 SAMPLE_ROWS = 20_000
 CHUNK_ROWS = 50_000
 MAX_EXAMPLES = 5
+MAX_COLUMNS = 1600         # Postgres' hard limit on columns per table
+
+log = logging.getLogger(__name__)
 
 _TOTAL_ROW = re.compile(r"^\s*(grand\s*|sub\s*)?totals?\b", re.IGNORECASE)
 
@@ -72,6 +76,10 @@ class Sink:
     def end_table(self):
         pass
 
+    def abort_table(self, exc):
+        """Undo the table that was being written when a sheet failed."""
+        pass
+
 
 def ingest_workbook(path, sink=None, progress=None):
     """Load every sheet in the workbook. Returns a list of SheetReport."""
@@ -82,7 +90,15 @@ def ingest_workbook(path, sink=None, progress=None):
         for info in reader.sheets():
             report = SheetReport(sheet=info.name, reader=reader.reader_for(info))
             start = time.perf_counter()
-            _ingest_sheet(reader, info, report, sink, used_tables, progress)
+            try:
+                _ingest_sheet(reader, info, report, sink, used_tables, progress)
+            except Exception as exc:
+                # One bad sheet is skipped and reported; the rest of the workbook still loads.
+                log.exception("sheet %r failed", info.name)
+                sink.abort_table(exc)
+                detail = str(exc).strip().splitlines()[0][:200] if str(exc).strip() else type(exc).__name__
+                report.status, report.reason = "skipped", f"couldn't be loaded: {detail}"
+                report.table, report.rows_loaded, report.skipped_rows, report.columns = None, 0, {}, []
             report.seconds = round(time.perf_counter() - start, 2)
             reports.append(report)
     finally:
@@ -104,6 +120,10 @@ def _ingest_sheet(reader, info, report, sink, used_tables, progress):
     sample = list(islice(body, SAMPLE_ROWS))
     header = head[h]
     width = max(_last_filled(header), *(_last_filled(r) for r in sample[:1000]), 0)
+    if width > MAX_COLUMNS:
+        report.status = "skipped"
+        report.reason = f"too wide: {width:,} columns, but a table can have at most {MAX_COLUMNS:,}"
+        return
 
     names = unique_names([clean_name(header[i] if i < len(header) else None, i) for i in range(width)])
     table = _unique_table_name(clean_name(info.name, 0), used_tables)
