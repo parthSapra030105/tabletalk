@@ -244,7 +244,8 @@ def answer(state: State, runtime: Runtime[Context]):
                     "rows": [{chart["x"]: r[xi], chart["y"]: r[yi], **({series: r[si]} if series else {})}
                              for r in result["rows"][:CHART_MAX_ROWS]]})
 
-    if plan["show_table"] or len(out) == 1:
+    # If any of the explanation was dropped, the rows may hold what it would have said (a name, a city).
+    if plan["show_table"] or len(out) == 1 or dropped:
         out.append(blocks.table(result["columns"], result["rows"]))
     if result["truncated"]:
         out.append(blocks.notice(f"Showing the first {len(result['rows']):,} rows; the query matched more."))

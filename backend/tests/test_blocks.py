@@ -146,6 +146,23 @@ def test_a_tiny_scrap_next_to_a_table_is_left_over_but_alone_it_is_the_data():
     assert len(find_blocks(alone)[0]) == 1
 
 
+def test_a_total_row_without_a_label_is_skipped():
+    g = grid(("keyword", "volume", "clicks"),
+             ("sofa", 900, 30),
+             ("bed", 800, 20),
+             ("lamp", 300, 10),
+             (_, 2000, 60))                     # =SUM(...) with no "Total" typed next to it
+    b = find_blocks(g)[0][0]
+    assert b.rows == [1, 2, 3] and (4, "total / summary row") in b.skipped
+
+
+def test_a_last_row_that_only_looks_like_a_total_is_kept():
+    not_sums = grid(("keyword", "volume"), ("sofa", 900), ("bed", 800), (_, 1000))
+    assert find_blocks(not_sums)[0][0].rows == [1, 2, 3]
+    labelled = grid(("keyword", "volume"), ("sofa", 900), ("bed", 800), ("lamp", 1700))
+    assert find_blocks(labelled)[0][0].rows == [1, 2, 3]
+
+
 def test_a_grid_with_no_header_is_all_leftover():
     g = grid(("P1", "Pune", 411001), ("P2", "Surat", 395007), ("P3", "Goa", 403001))
     blocks, leftovers = find_blocks(g)

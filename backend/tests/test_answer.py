@@ -53,3 +53,23 @@ def test_formats():
 def test_a_placeholder_in_an_unknown_shape_drops_its_sentence():
     text, dropped = grounded_text("Sales were {{first_rows[0][1]|inr}}. {{region[0]|text}} led.", RESULT, "q")
     assert text == "North led." and dropped == 1
+
+
+def test_when_the_explanation_is_dropped_the_rows_are_shown(monkeypatch):
+    from types import SimpleNamespace
+
+    import llm
+    from agent import answer
+    from llm import Usage
+
+    plan = {"text": "The top keyword is sofa with 1,35,000 searches.",       # typed, so it's dropped
+            "metrics": [{"label": "Searches", "column": "volume", "row": 0, "format": "number"}],
+            "chart": {"type": "none", "x": "", "y": "", "series": "", "format": "number"},
+            "show_table": False, "assumptions_note": "", "suggestions": []}
+    monkeypatch.setattr(llm, "structured", lambda *a, **k: (plan, Usage("answer", "m", 1, 1, 2, 0.1)))
+    result = {"columns": ["keyword", "volume"], "rows": [["sofa", 135000]], "truncated": False, "tables": ["kw"]}
+    state = {"result": result, "sql": "SELECT 1", "question": "top keyword?", "explanation": "", "assumptions": []}
+    runtime = SimpleNamespace(context=SimpleNamespace(catalog={"tables": [], "joins": []}))
+    out = answer.answer(state, runtime)["blocks"]
+    assert out[0] == {"type": "text", "content": "Here is the result."}
+    assert {"type": "table", "columns": ["keyword", "volume"], "rows": [["sofa", 135000]]} in out

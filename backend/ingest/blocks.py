@@ -20,6 +20,8 @@ into blocks, one per table, before anything is typed or loaded.
    stays one list.
 3. Notes: a row with a single text cell, a column with no header and fewer than three
    values, and a column with nothing under its header are dropped and kept as notes.
+   A last row with no text whose numbers are the sums of the rows above is a total
+   whose label was never typed, and is skipped like any other total row.
    Regions that are none of the above are reported as leftovers.
 """
 
@@ -271,6 +273,8 @@ def _finish(grid, b):
             b.skipped.append((i, "repeated header row"))
         else:
             kept.append(i)
+    if kept and _is_unlabelled_total(grid, b, kept):
+        b.skipped.append((kept.pop(), "total / summary row"))
     b.rows = kept
 
     columns = []
@@ -286,6 +290,27 @@ def _finish(grid, b):
     b.columns = columns
     b.header = tuple(b.header[c - b.left] for c in columns)
     b.notes = [str(n).strip()[:200] for n in b.notes][:MAX_NOTES]
+
+
+def _is_unlabelled_total(grid, b, rows):
+    """
+    A last row with no text whose every number is the sum of the numbers above it: a =SUM()
+    row whose "Total" label was never typed. A real data row matching every column's sum
+    exactly is too unlikely to worry about.
+    """
+    last = grid[rows[-1]][b.left:b.right]
+    if any(isinstance(v, str) for v in last):
+        return False
+    checked = 0
+    for k, v in enumerate(last):
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            continue
+        above = [grid[i][b.left + k] for i in rows[:-1]]
+        numbers = [x for x in above if isinstance(x, (int, float)) and not isinstance(x, bool)]
+        if len(numbers) < 2 or abs(sum(numbers) - v) > max(0.01, abs(v) * 1e-6):
+            return False
+        checked += 1
+    return checked > 0
 
 
 def _norm(v):

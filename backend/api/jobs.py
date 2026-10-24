@@ -44,7 +44,7 @@ def run(dataset_id):
 def _run(dataset_id):
     ds = Dataset.objects.get(pk=dataset_id)
     timings = {}
-    _update(ds, status=Dataset.Status.LOADING)
+    _update(ds, status=Dataset.Status.LOADING, error="")     # a re-run starts clean
 
     last_write = 0.0
 

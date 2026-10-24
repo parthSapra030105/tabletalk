@@ -64,7 +64,9 @@ in `assumptions`.
 
 SQL will compute any total, count, average, ranking, trend, growth rate or comparison from the raw
 rows, so never require a column that already holds the aggregate: a date column plus an amount
-column is enough for monthly sales, growth or "last 6 months". Set answerable to false only when a
+column is enough for monthly sales, growth or "last 6 months". Money goes by many column names
+(budget, net cost, cost, spend, amount): a question about budget or spend can be answered from any
+of them. Set answerable to false only when a
 concept the question needs has no column at all (profit or margin with no cost column; weather);
 then name that concept in `missing`. A question whose answer may simply be empty (a year outside
 the data) is still answerable.
@@ -168,7 +170,9 @@ def value_hints(catalog, selection, question):
 SQL_SYSTEM = """You write exactly one PostgreSQL SELECT that answers the question, using only the
 tables and columns described below (tables need no schema prefix).
 
-- Compare text with the stored values exactly as listed under "values exactly".
+- Compare text with the stored values exactly as listed under "values exactly". When a text
+  column shows only examples ("e.g."), its stored spelling may differ in case or spacing from the
+  question (AHMEDABAD vs Ahmedabad): compare as lower(trim(column)) = 'ahmedabad'.
 - When totalling money or counting sales or orders, leave out rows whose status marks them cancelled
   or void (if such a status value exists), unless the question is about those rows or the glossary
   says otherwise. Say so in assumptions.
@@ -176,6 +180,8 @@ tables and columns described below (tables need no schema prefix).
   can be reported as "no data" rather than as a real zero.
 - A column "stored as a fraction" holds a percentage as a share of 1 (0.25 means 25%). Multiply it by
   100 in the SELECT when returning it as a percentage, and name the alias with _pct.
+- "By X", "split by X", "per X" and "for each X" ask for one row per X: GROUP BY X and aggregate the
+  rest (SUM of money, COUNT of rows), rather than listing the rows one by one.
 - Aggregate in SQL; return the rows a person would want to see (usually under 50), with readable
   snake_case aliases. Round money to 2 decimals. Order the rows meaningfully.
 - Relative periods ("this quarter", "last 6 months") are relative to the latest date in the data,

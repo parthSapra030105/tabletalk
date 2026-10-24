@@ -8,12 +8,15 @@ point the OpenAI SDK at any OpenAI-compatible endpoint. Every call goes through
 
 import json
 import os
+import re
 import time
 from dataclasses import asdict, dataclass
 
 from openai import APITimeoutError, InternalServerError, OpenAI, RateLimitError
 
 _client = None
+RATE_LIMIT_RETRIES = 2
+RATE_LIMIT_MAX_WAIT = 60     # seconds; a per-minute limit is worth waiting out, a daily quota is not
 
 
 @dataclass
@@ -38,6 +41,27 @@ def client():
     return _client
 
 
+def _create(model, request):
+    """
+    One completion. A per-minute rate limit says how long to wait (Gemini: "retryDelay": "34s");
+    if that's short, wait and try again rather than fail. A daily quota asks for hours, so it
+    raises at once and the caller can fall back.
+    """
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        try:
+            return client().chat.completions.create(model=model, **request)
+        except RateLimitError as exc:
+            wait = _retry_delay(exc)
+            if attempt == RATE_LIMIT_RETRIES or wait is None or wait > RATE_LIMIT_MAX_WAIT:
+                raise
+            time.sleep(wait + 1)
+
+
+def _retry_delay(exc):
+    m = re.search(r"retryDelay['\"]?\s*:\s*['\"]?(\d+(?:\.\d+)?)s", str(exc))
+    return float(m[1]) if m else None
+
+
 def structured(purpose, messages, schema, schema_name):
     """
     Call the model with a strict JSON schema. Returns (parsed dict, Usage).
@@ -50,12 +74,12 @@ def structured(purpose, messages, schema, schema_name):
         "type": "json_schema", "json_schema": {"name": schema_name, "schema": schema, "strict": True}})
     start = time.perf_counter()
     try:
-        response = client().chat.completions.create(model=model, **request)
+        response = _create(model, request)
     except (InternalServerError, RateLimitError, APITimeoutError):
         if not fallback:
             raise
         model = fallback
-        response = client().chat.completions.create(model=model, **request)
+        response = _create(model, request)
     u = response.usage
     usage = Usage(purpose, model, u.prompt_tokens, u.completion_tokens, u.total_tokens,
                   round(time.perf_counter() - start, 2))
