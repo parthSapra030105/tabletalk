@@ -29,22 +29,29 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (depth.current === 0) setDragging(false)
     }
     const over = (e: DragEvent) => hasFile(e) && e.preventDefault()
+    // Capture phase: runs even when the upload dialog's own drop zone stops the event from bubbling.
+    const reset = () => {
+      depth.current = 0
+      setDragging(false)
+    }
     const drop = (e: DragEvent) => {
       if (!hasFile(e)) return
       e.preventDefault()
-      depth.current = 0
-      setDragging(false)
       const file = e.dataTransfer?.files[0]
       if (file) openUpload(file)
     }
     window.addEventListener('dragenter', enter)
     window.addEventListener('dragleave', leave)
     window.addEventListener('dragover', over)
+    window.addEventListener('drop', reset, true)
+    window.addEventListener('dragend', reset)
     window.addEventListener('drop', drop)
     return () => {
       window.removeEventListener('dragenter', enter)
       window.removeEventListener('dragleave', leave)
       window.removeEventListener('dragover', over)
+      window.removeEventListener('drop', reset, true)
+      window.removeEventListener('dragend', reset)
       window.removeEventListener('drop', drop)
     }
   }, [openUpload])

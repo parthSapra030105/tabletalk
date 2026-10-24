@@ -78,7 +78,8 @@ export function UploadDialog() {
 
   return (
     <Dialog open={upload.open} onOpenChange={(open) => !open && sent === null && closeUpload()}>
-      <DialogContent className="sm:max-w-lg">
+      {/* minmax(0, 1fr): grid items otherwise refuse to shrink below a long file name */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Upload a workbook</DialogTitle>
           <DialogDescription>
