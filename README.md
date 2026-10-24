@@ -14,6 +14,7 @@ The model never reads the data. It sees a compact description of the data, picks
 |---|---|---|
 | P0 | Test-data generator: 1M rows, 5 related sheets, an 86-column wide sheet, messy headers and values, planted stories | ✅ |
 | P0 | Excel upload loads every sheet with sensible types; skipped rows reported with reasons | ✅ |
+| Extra | Hand-made workbooks: several tables per sheet, titles, hidden sheets, merged cells, notes in the grid | ✅ tested on a real 21-sheet media plan |
 | P0 | Schema catalog stored per upload | ✅ |
 | P0 | LangGraph graph: 15 nodes, a six-way branch, the SQL retry loop | ✅ |
 | P0 | Read-only wall, tested against every attack in the brief | ✅ 11/11, data unchanged |
@@ -57,7 +58,7 @@ Open http://localhost:5173, choose the sample dataset, and ask *"What were total
 **Checks:**
 ```bash
 cd backend
-python -m pytest                       # 116 tests, including writes attempted through the read-only role and through MCP
+python -m pytest                       # 151 tests, including writes attempted through the read-only role and through MCP
 python manage.py safety_check          # the brief's attack list end to end; rewrites docs/safety-report.md
 python manage.py eval                  # 10 questions with known answers; rewrites docs/eval-report.md
 python manage.py token_report          # tokens per turn for the latest chat
@@ -199,15 +200,32 @@ Full answers and checksums: [docs/safety-report.md](docs/safety-report.md).
 
 ## Ingestion
 
-One endpoint takes an `.xlsx` file. It is checked before acceptance, then loaded in a background thread. Each upload gets its own Postgres schema (`ds_1`, `ds_2`, …) with one table per sheet. Rows stream in through `COPY`, and the whole workbook loads in one transaction, so a failed upload leaves nothing behind. The UI polls progress per sheet.
+One endpoint takes an `.xlsx` file. It is checked before acceptance, then loaded in a background thread. Each upload gets its own Postgres schema (`ds_1`, `ds_2`, …) with one Postgres table per table found in the workbook. Rows stream in through `COPY`, and the whole workbook loads in one transaction, so a half-loaded dataset can never be queried. Each table has its own savepoint inside it: a table that fails is rolled back and reported, and the rest still load. The UI polls progress per sheet.
 
-For each sheet, the loader:
+For each table, the loader:
 - finds the real header row, past title and blank rows
 - cleans the names (`Sales Amt (₹)` → `sales_amt`) and keeps the originals
 - infers types from a 20k-row sample, deciding day-first vs month-first once per column
 - converts `1,24,500.00`, `₹6,499`, `(1,234)`, `N/A` and `Y/Yes/TRUE`
 - merges spelling and casing variants (`north`, ` North `, `NORTH`)
-- skips blank rows, total rows and exact duplicates, reporting each with example row numbers
+- skips blank rows, total rows (labelled or not) and exact duplicates, reporting each with example row numbers
+- keeps pincodes, zip codes and phone numbers as text, so `380054` isn't summed and `411001 + 411002` isn't lost
+
+### Hand-made workbooks
+
+Exports have one table per sheet, but planning workbooks don't. Sheets small enough to hold in memory (under 2M cells, which covers anything made by hand) are first split into tables by `ingest/blocks.py`:
+
+- **XY-cut:** split the sheet at blank rows, split each part at empty columns, and repeat inside each part. "Empty" is judged inside each part, so a stray cell far off to the right becomes its own small table instead of making one 16,000-column table.
+- **Titles:** rows above a header, and small text-only blocks over a table ("Client: …", "Duration: …"), become the table's title. Lines starting with `*` are footnotes.
+- **Blank rows inside a table don't split it.** A part with no header continues the table above it, and so does a text-heavy row that looks like a header but has the same kinds of values as the data above it.
+- **Notes stay notes:** a row with one text cell, a nearly empty unlabelled column, and a label over an empty column are kept as the table's notes, not loaded as data.
+- **Merged cells** that span rows (a category covering five rows) are filled down. **Hidden sheets** load, but are marked.
+- **Lists:** a single column of text loads as a list, even when blank rows split it.
+- Anything with no header row is skipped and reported with its cell range.
+
+Every table records its sheet, cell range (e.g. `B3:P58`), title, notes and whether its sheet is hidden. The dataset page shows all of it. Bigger sheets are exports and keep the streaming path below. On the generated workbooks, every table loads exactly as it did before this step.
+
+On a real 21-sheet agency media plan (12 sheets hidden, stacked and side-by-side tables, merged cells, notes typed into the grid), this turned a load that failed into 45 tables in about 2.5 s, with the unreadable regions (pivot-style booking grids, headerless side lists) skipped and reported. Asking it questions also showed that several `=SUM()` totals in that file start three rows late, because Tabletalk sums the actual rows.
 
 Full sample workbook (1,001,375 rows kept, 49 junk rows skipped), loaded into Postgres:
 
@@ -250,7 +268,8 @@ python -m ingest ../data/tabletalk_sample.xlsx --answer-key ../data/tabletalk_sa
 The catalog is what the model is told about a dataset. It is built once per upload:
 
 - **SQL profiling, during the load:** types, nulls, distinct counts, ranges, exact categorical values, keys, joins and indexes.
-- **One LLM call per table:** a one-line description of each column, plus groups of easily confused columns (`gross_amount` / `net_amount`, `order_date` / `ship_date`, `status` / `status_2`). For the sample workbook this was 5 calls and 17,279 tokens in total, paid once.
+- **One LLM call per table:** a one-line description of each column, plus groups of easily confused columns (`gross_amount` / `net_amount`, `order_date` / `ship_date`, `status` / `status_2`). For the sample workbook this was 5 calls and 17,279 tokens in total, paid once. The call also gets the table's title, so similar tables (one per platform, or an older version of a plan) get descriptions that tell them apart.
+- **Flags for the model:** tables on hidden sheets are marked, and the schema step prefers visible ones. Percentages stored as fractions (0.25 for 25%) are marked, so they're shown as percentages. Tables sharing most of their columns are treated as parallel versions, not related tables, so no join is recorded between them, and the model is told not to add a summary table to its own detail.
 
 At question time the model gets a compact index, plus full details only for the columns picked for this question:
 
@@ -297,12 +316,12 @@ Generating the full file takes ~3 min 10 s (93.7 MB): 3.5 s for the data, 4.1 s 
 
 ```
 backend/
-  ingest/      read sheets, find headers, infer types, skip junk rows, COPY into Postgres
+  ingest/      read sheets, find the tables on each sheet, find headers, infer types, skip junk rows, COPY into Postgres
   catalog/     profile columns, detect joins, LLM descriptions, compact index for prompts
   agent/       the LangGraph graph: state, nodes, sqlguard (wall #1), tools, answer grounding
   api/         Django: models, views, background upload jobs, chat service, management commands
   llm.py       the single place that calls the model
-  tests/       107 tests
+  tests/       151 tests
 frontend/src/
   pages/       dashboard, dataset report, chat
   components/  sidebar shell, upload dialog, block renderers (chart, table, SQL, metrics, suggestions)
