@@ -48,6 +48,11 @@ def test_right_credentials_pass(monkeypatch):
     assert _app(monkeypatch)(request).status_code == 200
 
 
+def test_health_check_needs_no_sign_in(monkeypatch):
+    assert _app(monkeypatch)(RequestFactory().get("/healthz")).status_code == 200
+    assert _app(monkeypatch)(RequestFactory().get("/healthz/")).status_code == 401
+
+
 def test_password_may_contain_a_colon(monkeypatch):
     request = RequestFactory().get("/", HTTP_AUTHORIZATION=_header("demo:a:b"))
     assert _app(monkeypatch, password="a:b")(request).status_code == 200
@@ -67,3 +72,4 @@ def test_api_paths_are_not_sent_to_the_ui():
     from tabletalk.urls import frontend
     assert resolve("/api/datasets/").func is not frontend
     assert resolve("/datasets/3").func is frontend
+    assert resolve("/healthz").func is not frontend

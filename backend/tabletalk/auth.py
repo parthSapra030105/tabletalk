@@ -3,7 +3,8 @@ One shared sign-in for a hosted copy, using the browser's own prompt (HTTP Basic
 
 Off unless APP_USER and APP_PASSWORD are set, so local development is unchanged. The
 browser then sends the credentials with every request, including the UI's fetch and XHR
-calls, so nothing in the frontend needs to know about it.
+calls, so nothing in the frontend needs to know about it. /healthz stays open for uptime
+monitors: it answers "ok" and touches nothing else.
 """
 
 import base64
@@ -13,6 +14,8 @@ import os
 
 from django.http import HttpResponse
 
+OPEN_PATHS = {"/healthz"}
+
 
 class BasicAuth:
     def __init__(self, get_response):
@@ -21,7 +24,8 @@ class BasicAuth:
         self.expected = f"{user}:{password}".encode() if user and password else None
 
     def __call__(self, request):
-        if self.expected and not self._signed_in(request.headers.get("Authorization", "")):
+        if (self.expected and request.path not in OPEN_PATHS
+                and not self._signed_in(request.headers.get("Authorization", ""))):
             response = HttpResponse("Sign-in required", status=401)
             response["WWW-Authenticate"] = 'Basic realm="Tabletalk", charset="UTF-8"'
             return response

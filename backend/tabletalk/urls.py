@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.urls import path, re_path
 
 from api import views
@@ -12,7 +12,12 @@ def frontend(request):
     return FileResponse(open(index, "rb"), content_type="text/html")
 
 
+def healthz(request):
+    return HttpResponse("ok", content_type="text/plain")
+
+
 urlpatterns = [
+    path("healthz", healthz),
     path("api/datasets/", views.datasets),
     path("api/datasets/<int:dataset_id>/", views.dataset),
     path("api/datasets/<int:dataset_id>/threads/", views.threads),
