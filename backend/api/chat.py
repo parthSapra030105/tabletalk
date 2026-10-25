@@ -34,7 +34,8 @@ def checkpointer():
     global _saver
     if _saver is None:
         from langgraph.checkpoint.postgres import PostgresSaver
-        pool = ConnectionPool(os.environ["DATABASE_URL"], max_size=5, open=True,
+        # check: a connection the server dropped while idle is replaced instead of failing a question.
+        pool = ConnectionPool(os.environ["DATABASE_URL"], max_size=5, open=True, check=ConnectionPool.check_connection,
                               kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row})
         _saver = PostgresSaver(pool)
         _saver.setup()                       # creates the checkpoint tables in `public` if missing

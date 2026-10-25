@@ -1,6 +1,16 @@
-from django.urls import path
+from django.conf import settings
+from django.http import FileResponse, Http404
+from django.urls import path, re_path
 
 from api import views
+
+
+def frontend(request):
+    index = settings.FRONTEND_DIR / "index.html"
+    if not index.exists():
+        raise Http404("The frontend isn't built")
+    return FileResponse(open(index, "rb"), content_type="text/html")
+
 
 urlpatterns = [
     path("api/datasets/", views.datasets),
@@ -10,4 +20,5 @@ urlpatterns = [
     path("api/datasets/<int:dataset_id>/glossary/<str:term>/", views.glossary_entry),
     path("api/threads/<uuid:thread_id>/", views.thread),
     path("api/threads/<uuid:thread_id>/messages/", views.messages),
+    re_path(r"^(?!api/).*$", frontend),
 ]

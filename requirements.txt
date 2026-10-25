@@ -1,4 +1,5 @@
 django==6.1.2
+gunicorn==26.2.0
 langgraph==1.2.15
 langgraph-checkpoint-postgres==3.2.0
 mcp==2.3.0
@@ -15,4 +16,5 @@ python-calamine==0.8.3
 python-dotenv==1.2.4
 sqlglot==30.23.0
 tiktoken==0.14.0
+whitenoise==6.12.0
 xlsxwriter==3.2.9
